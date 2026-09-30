@@ -21,6 +21,7 @@ export type AdminModule = {
  fields: AdminField[];
  records: AdminRecord[];
  permissions: AdminPermission[];
+ route?: string;
 };
 
 export type AdminRole = {

@@ -1,7 +1,9 @@
 import { model, Schema, type HydratedDocument, type Types } from "mongoose";
 
-export const leadStatuses = ["New", "Qualified", "Proposal", "Won", "Lost"] as const;
+export const leadStatuses = ["New", "Contacted", "Qualified", "Proposal", "Negotiation", "Won", "Lost"] as const;
 export type LeadStatus = (typeof leadStatuses)[number];
+
+export type LeadActivity = { title: string; detail: string; at: Date; by?: Types.ObjectId };
 
 export type Lead = {
   organizationId?: Types.ObjectId;
@@ -12,8 +14,10 @@ export type Lead = {
   source: string;
   status: LeadStatus;
   value: number;
+  currency?: string;
   ownerId?: Types.ObjectId;
   metadata: Record<string, unknown>;
+  activities: LeadActivity[];
   createdBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -31,8 +35,23 @@ const leadSchema = new Schema<Lead>(
     source: { type: String, required: true, trim: true, maxlength: 80, default: "Workflow", index: true },
     status: { type: String, enum: leadStatuses, default: "New", index: true },
     value: { type: Number, min: 0, default: 0 },
+    currency: { type: String, trim: true, uppercase: true, maxlength: 3 },
     ownerId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     metadata: { type: Schema.Types.Mixed, default: {} },
+    activities: {
+      type: [
+        new Schema<LeadActivity>(
+          {
+            title: { type: String, required: true, maxlength: 120 },
+            detail: { type: String, default: "", maxlength: 400 },
+            at: { type: Date, default: Date.now },
+            by: { type: Schema.Types.ObjectId, ref: "User" },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true, versionKey: false },

@@ -47,6 +47,7 @@ export type Task = {
   timeEntries: TimeEntry[];
   recurring: boolean;
   recurrence: string;
+  isDailyTask: boolean;
   isArchived: boolean;
   createdBy?: Types.ObjectId;
   updatedBy?: Types.ObjectId;
@@ -108,6 +109,7 @@ const taskSchema = new Schema<Task>(
     timeEntries: { type: [timeEntrySchema], default: [] },
     recurring: { type: Boolean, default: false },
     recurrence: { type: String, trim: true, default: "None" },
+    isDailyTask: { type: Boolean, default: false, index: true },
     isArchived: { type: Boolean, default: false, index: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
@@ -132,5 +134,6 @@ taskSchema.index({ projectId: 1, issueType: 1, backlogRank: 1 });
 taskSchema.index({ projectId: 1, sprintId: 1, status: 1 });
 taskSchema.index({ projectId: 1, epicId: 1, status: 1 });
 taskSchema.index({ assigneeId: 1, status: 1 });
+taskSchema.index({ assigneeId: 1, isDailyTask: 1, dueDate: 1 });
 
 export const TaskModel = model("Task", taskSchema);

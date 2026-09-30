@@ -1,6 +1,7 @@
 import type { Types } from "mongoose";
 import { env } from "../config/env.js";
 import { integrationFamilies, type IntegrationFamily, type IntegrationKey } from "../constants/integration.js";
+import type { ProviderDefinition } from "../integrations/types.js";
 import {
   getIntegrationMeta,
   getProviderForIntegration,
@@ -15,6 +16,64 @@ import { AppError } from "../utils/app-error.js";
 import { decryptSecret, encryptSecret } from "../utils/crypto.js";
 import { signOAuthState, verifyOAuthState } from "../utils/oauth-state.js";
 import { notificationService } from "./notification.service.js";
+
+type ConnectionWithTokens = {
+  _id: unknown;
+  organizationId: unknown;
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: Date;
+};
+
+async function resolveFreshAccessToken(
+  organizationId: Types.ObjectId,
+  integrationKey: IntegrationKey,
+  provider: ProviderDefinition,
+  connection: ConnectionWithTokens,
+): Promise<string> {
+  const storedAccessToken = decryptSecret(connection.accessToken!);
+  const expiresAt = connection.tokenExpiresAt ? new Date(connection.tokenExpiresAt).getTime() : undefined;
+  const isExpiringSoon = expiresAt !== undefined && expiresAt - Date.now() < 60_000;
+
+  if (!isExpiringSoon || !connection.refreshToken || !provider.oauth) {
+    return storedAccessToken;
+  }
+
+  const config = await integrationProviderConfigRepository.findByFamilyWithSecret(provider.family);
+  if (!config?.clientId || !config?.clientSecret) {
+    return storedAccessToken;
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: decryptSecret(connection.refreshToken),
+    client_id: config.clientId,
+    client_secret: decryptSecret(config.clientSecret),
+  });
+
+  const response = await fetch(provider.oauth.tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body,
+  });
+  const tokenBody = (await response.json().catch(() => ({}))) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
+
+  if (!response.ok || !tokenBody.access_token) {
+    return storedAccessToken;
+  }
+
+  await integrationRepository.upsertConnection(organizationId, integrationKey, {
+    accessToken: encryptSecret(tokenBody.access_token),
+    refreshToken: tokenBody.refresh_token ? encryptSecret(tokenBody.refresh_token) : connection.refreshToken,
+    tokenExpiresAt: tokenBody.expires_in ? new Date(Date.now() + tokenBody.expires_in * 1000) : connection.tokenExpiresAt,
+  });
+
+  return tokenBody.access_token;
+}
 
 async function resolveOrganizationId(): Promise<Types.ObjectId> {
   const organization = await organizationRepository.getOrCreateDefault();
@@ -178,7 +237,8 @@ export class IntegrationService {
       return result;
     }
 
-    const result = await provider.testConnection(decryptSecret(connection.accessToken));
+    const accessToken = await resolveFreshAccessToken(organizationId, integrationKey, provider, connection);
+    const result = await provider.testConnection(accessToken);
     await integrationLogRepository.create(organizationId, integrationKey, "health_check", result.ok ? "success" : "error", result.detail);
     return result;
   }
@@ -198,7 +258,8 @@ export class IntegrationService {
       return result;
     }
 
-    const result = await provider.sync(decryptSecret(connection.accessToken), integrationKey);
+    const accessToken = await resolveFreshAccessToken(organizationId, integrationKey, provider, connection);
+    const result = await provider.sync(accessToken, integrationKey, { organizationId: organizationId.toString() });
     await integrationRepository.recordSyncResult((connection._id as Types.ObjectId).toString(), "success", result.summary);
     await integrationLogRepository.create(organizationId, integrationKey, "sync", "success", result.summary);
     return result;
@@ -231,8 +292,9 @@ export class IntegrationService {
       if (!provider.sync) continue;
 
       try {
-        const accessToken = decryptSecret(connection.accessToken);
-        const result = await provider.sync(accessToken, connection.integrationKey);
+        const organizationId = connection.organizationId as Types.ObjectId;
+        const accessToken = await resolveFreshAccessToken(organizationId, connection.integrationKey, provider, connection);
+        const result = await provider.sync(accessToken, connection.integrationKey, { organizationId: organizationId.toString() });
         await integrationRepository.recordSyncResult((connection._id as Types.ObjectId).toString(), "success", result.summary);
         await integrationLogRepository.create(connection.organizationId as Types.ObjectId, connection.integrationKey, "sync", "success", result.summary);
         synced += 1;

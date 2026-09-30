@@ -42,7 +42,7 @@ test("Admin app login, routes, search, and dashboard exclude Manager", async () 
 test("Employee login accepts Manager and excludes Owner and Administrator", async () => {
  const loginSource = await source("frontend/src/features/auth/login/LoginPage.tsx");
 
- assert.match(loginSource, /const intendedFor = \["Manager", "Employee", "HR", "Finance", "Sales", "Support", "Developer", "Guest"\] as const/);
+ assert.match(loginSource, /const intendedFor = \["Manager", "Employee", "HR", "Finance", "Sales", "Support", "Developer"\] as const/);
  assert.match(loginSource, /allowedRoles=\{intendedFor\}/);
  assert.doesNotMatch(loginSource, /"Owner"|"Administrator"/);
 });

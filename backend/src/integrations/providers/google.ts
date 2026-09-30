@@ -1,4 +1,16 @@
+import { Types } from "mongoose";
+import { meetingRepository } from "../../repositories/meeting.repository.js";
 import type { ProviderDefinition } from "../types.js";
+
+type GoogleCalendarEvent = {
+  id: string;
+  summary?: string;
+  status?: string;
+  htmlLink?: string;
+  hangoutLink?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+};
 
 export const googleProvider: ProviderDefinition = {
   family: "google",
@@ -27,14 +39,39 @@ export const googleProvider: ProviderDefinition = {
     const body = (await response.json()) as { email?: string };
     return { ok: true, detail: body.email ? `Connected as ${body.email}` : "Connected" };
   },
-  async sync(accessToken, integrationKey) {
+  async sync(accessToken, integrationKey, context) {
     if (integrationKey === "google_calendar") {
-      const response = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", {
+      const timeMin = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
+      url.searchParams.set("maxResults", "50");
+      url.searchParams.set("singleEvents", "true");
+      url.searchParams.set("orderBy", "startTime");
+      url.searchParams.set("timeMin", timeMin);
+
+      const response = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!response.ok) return { itemsSynced: 0, summary: `Calendar sync failed (${response.status})` };
-      const body = (await response.json()) as { items?: unknown[] };
-      return { itemsSynced: body.items?.length ?? 0, summary: `${body.items?.length ?? 0} calendars visible` };
+      const body = (await response.json()) as { items?: GoogleCalendarEvent[] };
+      const events = body.items ?? [];
+      const organizationId = new Types.ObjectId(context.organizationId);
+
+      let synced = 0;
+      for (const event of events) {
+        const startTime = event.start?.dateTime ?? event.start?.date;
+        if (!event.id || !event.summary || !startTime) continue;
+        await meetingRepository.upsertSynced(organizationId, "google", event.id, {
+          title: event.summary,
+          startTime: new Date(startTime),
+          endTime: event.end?.dateTime || event.end?.date ? new Date(event.end.dateTime ?? event.end.date!) : undefined,
+          status: event.status === "cancelled" ? "Cancelled" : "Scheduled",
+          link: event.hangoutLink ?? event.htmlLink,
+          organizerName: "Google Calendar",
+        });
+        synced += 1;
+      }
+
+      return { itemsSynced: synced, summary: `${synced} calendar events synced` };
     }
 
     if (integrationKey === "google_drive") {

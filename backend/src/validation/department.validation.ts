@@ -25,6 +25,15 @@ export const departmentIdParamsSchema = z.object({
   id: z.string().min(1),
 });
 
+/** `?deleteTeams=true` is the caller confirming that the department's teams go with it. */
+export const deleteDepartmentQuerySchema = z.object({
+  deleteTeams: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+});
+export type DeleteDepartmentQuery = z.infer<typeof deleteDepartmentQuerySchema>;
+
 export const listDepartmentsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),

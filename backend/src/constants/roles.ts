@@ -8,7 +8,6 @@ export const userRoles = [
   "Support",
   "Developer",
   "Employee",
-  "Guest",
 ] as const;
 
 export type UserRole = (typeof userRoles)[number];

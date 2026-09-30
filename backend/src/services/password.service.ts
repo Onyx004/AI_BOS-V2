@@ -6,7 +6,8 @@ import { passwordPolicySchema } from "../utils/password.js";
 import { hashPassword, verifyPassword } from "../utils/password.js";
 import { AppError } from "../utils/app-error.js";
 import { securityService } from "./security.service.js";
-import type { ChangePasswordInput } from "../validation/auth.validation.js";
+import type { ChangePasswordInput, ChangePinInput } from "../validation/auth.validation.js";
+import { attendanceService } from "./attendance.service.js";
 
 const MAX_PASSWORD_HISTORY = 5;
 
@@ -91,6 +92,13 @@ export class PasswordService {
     const newHash = await hashPassword(input.newPassword);
     await this.changePasswordWithHistory(userId, newHash, userWithPassword.passwordHash);
 
+    if (input.pin) await userRepository.setPin(userId, await hashPassword(input.pin));
+    // Users who just finished first-login setup have not been checked in yet (login was blocked on the password change).
+    if (userWithPassword.mustChangePassword) {
+      await attendanceService.recordLoginCheckIn(userId, userWithPassword.role, meta).catch(() => undefined);
+    }
+    await userRepository.touchLastSeen(userId);
+
     await securityService.recordSecurityEvent({
       userId,
       eventType: "password_changed",
@@ -101,6 +109,25 @@ export class PasswordService {
       description: "Password was changed",
     });
 
+    return { updated: true };
+  }
+
+  async changePin(userId: string, input: ChangePinInput, meta?: { ip?: string; userAgent?: string; deviceId?: string }) {
+    const user = await userRepository.findPinHash(userId);
+    if (!user) throw new AppError("User not found", 404);
+    if (!(await verifyPassword(input.currentPassword, user.passwordHash))) {
+      throw new AppError("Current password is incorrect", 400);
+    }
+    await userRepository.setPin(userId, await hashPassword(input.pin));
+    await securityService.recordSecurityEvent({
+      userId,
+      eventType: "password_changed",
+      severity: "medium",
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+      deviceId: meta?.deviceId,
+      description: "Sign-in PIN was changed",
+    });
     return { updated: true };
   }
 }

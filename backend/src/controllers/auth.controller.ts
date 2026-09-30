@@ -58,6 +58,19 @@ export class AuthController {
     });
   };
 
+  changePin: RequestHandler = async (req, res) => {
+    const result = await passwordService.changePin(req.user!.id, req.body, {
+      ip: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+      deviceId: req.header("x-device-id") ?? undefined,
+    });
+
+    sendSuccess(res, 200, {
+      message: "PIN saved successfully",
+      data: result,
+    });
+  };
+
   logout: RequestHandler = async (req, res) => {
     const refreshToken = req.body?.refreshToken ?? req.cookies?.[refreshTokenCookieName];
     await authService.logout(refreshToken);

@@ -139,6 +139,7 @@ export type Department = {
  description?: string;
  headId?: string;
  status: (typeof activeStatuses)[number];
+ memberCount?: number;
 };
 
 export type DepartmentFormInput = {

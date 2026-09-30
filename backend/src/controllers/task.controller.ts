@@ -5,6 +5,8 @@ import type { ListTasksQuery } from "../validation/task.validation.js";
 export class TaskController {
   stats = jsonController(200, "Task stats fetched successfully", ({ req }) => taskService.stats(req.user!));
 
+  teamSummary = jsonController(200, "Team task summary fetched successfully", ({ req }) => taskService.teamSummary(req.user!));
+
   list = jsonController(200, "Tasks fetched successfully", ({ req }) =>
     taskService.list(req.query as unknown as ListTasksQuery, req.user!),
   );
@@ -15,6 +17,10 @@ export class TaskController {
 
   create = jsonController(201, "Task created successfully", ({ req }) =>
     taskService.create(req.body, req.user?.id),
+  );
+
+  createDaily = jsonController(201, "Daily task created successfully", ({ req }) =>
+    taskService.createDailyTask(req.body.title, req.user!),
   );
 
   getById = jsonController(200, "Task fetched successfully", ({ req }) =>

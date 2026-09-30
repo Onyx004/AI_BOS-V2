@@ -46,7 +46,28 @@ export class UserRepository {
   }
 
   async findByEmailWithPassword(email: string) {
-    return UserModel.findOne({ email: email.toLowerCase() }).select("+passwordHash");
+    return UserModel.findOne({ email: email.toLowerCase() }).select("+passwordHash +pinHash");
+  }
+
+  async setPin(id: string, pinHash: string) {
+    return UserModel.findByIdAndUpdate(id, { $set: { pinHash, pinSetAt: new Date() } }, { new: true });
+  }
+
+  async findPinHash(id: string) {
+    return UserModel.findById(id).select("+pinHash +passwordHash");
+  }
+
+  async touchLastSeen(id: string, at = new Date()) {
+    await UserModel.updateOne({ _id: id }, { $set: { lastSeenAt: at } });
+  }
+
+  async findLastSeenByIds(ids: string[]) {
+    return UserModel.find({ _id: { $in: ids } }).select("lastSeenAt").lean();
+  }
+
+  /** Users holding a role by name (users store the role name, roles are matched case-insensitively). */
+  async countByRoleName(roleName: string) {
+    return UserModel.countDocuments({ role: new RegExp(`^${roleName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
   }
 
   async countActiveByRole(role: string) {
@@ -172,6 +193,22 @@ export class UserRepository {
     return UserModel.exists(filter);
   }
 
+  /** Removes deleted teams from every member's team list. */
+  async removeTeams(teamIds: unknown[]) {
+    if (teamIds.length === 0) return;
+    await UserModel.updateMany({ teamIds: { $in: teamIds } }, { $pull: { teamIds: { $in: teamIds } } });
+  }
+
+  /** Takes one employee out of their department (Unassigned). */
+  async clearUserDepartment(id: string) {
+    return UserModel.findByIdAndUpdate(id, { $unset: { departmentId: "" } }, { new: true });
+  }
+
+  async clearDepartment(departmentId: string) {
+    const result = await UserModel.updateMany({ departmentId }, { $unset: { departmentId: "" } });
+    return result.modifiedCount;
+  }
+
   async listByOrganization(organizationId: string) {
     return UserModel.find({ organizationId })
       .select("fullName email role departmentId branchId managerId teamIds")
@@ -190,6 +227,14 @@ export class UserRepository {
 
   async findActiveByRoles(roles: string[]) {
     return UserModel.find({ role: { $in: roles }, isActive: true }).select("_id").lean();
+  }
+
+  /** Role slugs are stored lower-cased on roles but users keep the display casing ("Sales"), so match case-insensitively. */
+  async findActiveByRoleSlugs(slugs: string[]) {
+    return UserModel.find({ role: { $in: slugs.map((slug) => new RegExp(`^${slug}$`, "i")) }, isActive: true })
+      .select("fullName role")
+      .sort({ fullName: 1 })
+      .lean();
   }
 
   async findAllActive() {

@@ -41,6 +41,16 @@ leadRoutes.patch(
   ...route(requirePermission("lead.update"), validate({ params: leadIdParamsSchema, body: updateLeadSchema }), leadController.update),
 );
 
+leadRoutes.post(
+  "/:id/convert",
+  ...route(
+    requirePermission("lead.update"),
+    requirePermission("customer.create"),
+    validate({ params: leadIdParamsSchema }),
+    leadController.convert,
+  ),
+);
+
 leadRoutes.delete(
   "/:id",
   ...route(requirePermission("lead.delete"), validate({ params: leadIdParamsSchema }), leadController.delete),

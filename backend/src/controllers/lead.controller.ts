@@ -18,7 +18,11 @@ export class LeadController {
   );
 
   update = jsonController(200, "Lead updated successfully", ({ req }) =>
-    leadService.update(req.params.id, req.body),
+    leadService.update(req.params.id, req.body, req.user?.id),
+  );
+
+  convert = jsonController(200, "Lead converted to customer successfully", ({ req }) =>
+    leadService.convertToCustomer(req.params.id, req.user?.id),
   );
 
   delete = jsonController(200, "Lead deleted successfully", ({ req }) =>

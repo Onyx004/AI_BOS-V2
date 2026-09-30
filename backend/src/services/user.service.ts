@@ -1,4 +1,5 @@
 import { getAssignableRoles } from "../constants/user-hierarchy.js";
+import { roleRepository } from "../repositories/role.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { PasswordChangeModel } from "../models/password-history.model.js";
 import { AppError } from "../utils/app-error.js";
@@ -83,8 +84,19 @@ export class UserService {
     return users.map((user) => toEmployeeDto(user));
   }
 
-  getAssignableRoles(creatorRole: string) {
-    return getAssignableRoles(creatorRole);
+  /**
+   * Built-in roles the actor may hand out, plus every active custom role when the actor has full access
+   * (Owner/Administrator). Managers and HR stay limited to their fixed list so a custom role can never be
+   * used to give someone more access than the creator is trusted with.
+   */
+  async getAssignableRoles(creatorRole: string): Promise<string[]> {
+    const builtIn: string[] = getAssignableRoles(creatorRole);
+    // Only Owner/Administrator hold full access (custom roles never do), so no permission lookup is needed here.
+    if (!protectedAccountRoles.has(creatorRole)) return builtIn;
+
+    const roles = await roleRepository.listAll();
+    const custom = roles.filter((role) => !role.isSystem && role.isActive && !role.hasFullAccess).map((role) => role.name);
+    return [...builtIn, ...custom];
   }
 
   async createUser(creatorUserId: string, input: CreateUserProfileInput) {
@@ -94,7 +106,7 @@ export class UserService {
       throw new AppError("Creator account not found", 404);
     }
 
-    const assignableRoles = getAssignableRoles(creator.role);
+    const assignableRoles = await this.getAssignableRoles(creator.role);
 
     if (!assignableRoles.includes(input.role)) {
       throw new AppError("You are not allowed to create a user with this role", 403);
@@ -193,7 +205,10 @@ export class UserService {
 
     await assertCanManage({ id: actorUserId, role: actorRole }, targetUserId);
 
-    const updated = await userRepository.updateEmployeeProfile(targetUserId, { departmentId: input.departmentId });
+    const updated =
+      input.departmentId === null
+        ? await userRepository.clearUserDepartment(targetUserId)
+        : await userRepository.updateEmployeeProfile(targetUserId, { departmentId: input.departmentId });
     if (!updated) {
       throw new AppError("User not found", 404);
     }
@@ -235,9 +250,13 @@ export class UserService {
       throw new AppError("User not found", 404);
     }
 
+    if (protectedAccountRoles.has(target.role)) {
+      throw new AppError("The role of an Owner or Administrator account cannot be changed here", 403);
+    }
+
     await assertCanManage({ id: actorUserId, role: actorRole }, targetUserId);
 
-    const assignableRoles = getAssignableRoles(actorRole);
+    const assignableRoles = await this.getAssignableRoles(actorRole);
     if (!assignableRoles.includes(input.role)) {
       throw new AppError("You are not allowed to assign this role", 403);
     }

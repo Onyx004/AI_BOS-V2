@@ -5,7 +5,6 @@ import {
  CheckSquare,
  ContactRound,
  FileText,
- ShieldCheck,
  Package,
  UserRound,
  UsersRound,
@@ -56,7 +55,7 @@ const supportNav = [
  },
 ];
 
-type FrontlineDashboardRole = "Manager" | "Employee" | "HR" | "Finance" | "Sales" | "Support" | "Developer" | "Guest";
+type FrontlineDashboardRole = "Manager" | "Employee" | "HR" | "Finance" | "Sales" | "Support" | "Developer";
 
 const roleDashboards: Record<FrontlineDashboardRole, ProfessionalDashboardConfig> = {
  Manager: {
@@ -84,7 +83,6 @@ const roleDashboards: Record<FrontlineDashboardRole, ProfessionalDashboardConfig
  {
  label: "Account",
  items: [
- { label: "Analytics", href: "/analytics", icon: WalletCards },
  { label: "Notifications", href: "/notifications", icon: CheckCircle2 },
  { label: "Profile", href: "/profile", icon: UserRound },
  ],
@@ -100,7 +98,6 @@ const roleDashboards: Record<FrontlineDashboardRole, ProfessionalDashboardConfig
  { label: "Projects", href: "/projects", icon: BriefcaseBusiness, note: "Milestones, budgets, timelines, and project details" },
  { label: "Tasks", href: "/tasks", icon: CheckSquare, note: "Assignments, priorities, checklists, and delivery" },
  { label: "Employees", href: "/employees", icon: UsersRound, note: "Live employee records and team operations" },
- { label: "Analytics", href: "/analytics", icon: WalletCards, note: "Delivery performance, workload, and risk trends" },
  ],
  queue: [],
  activity: [],
@@ -242,32 +239,10 @@ const roleDashboards: Record<FrontlineDashboardRole, ProfessionalDashboardConfig
  insights: [],
  focus: ["Developer access", "Tasks", "Technical context", "Documents"],
  },
- Guest: {
- storageKey: "guest",
- eyebrow: "Guest Workspace",
- title: "Guest Dashboard",
- subtitle: "A limited workspace for shared documents, assigned meetings, approved tasks, and collaboration.",
- roleLabel: "Guest",
- navGroups: commonNav,
- stats: [
- { label: "Assigned Tasks", value: "—", trend: "Loading…", icon: CheckSquare, href: "/tasks" },
- { label: "Access Scope", value: "Limited", trend: "Guest", icon: UserRound },
- ],
- primaryActions: [
- { label: "Tasks", href: "/tasks", icon: CheckSquare, note: "Assigned guest tasks and action items" },
- { label: "Documents", href: "/documents", icon: FileText, note: "Shared files and approved resources" },
- { label: "Meetings", href: "/meetings", icon: CalendarDays, note: "Invited meetings and notes" },
- { label: "Messenger", href: "/messenger", icon: FileText, note: "Coordinate inside approved rooms" },
- ],
- queue: [],
- activity: [],
- insights: [],
- focus: ["Guest access", "Shared documents", "Assigned tasks", "Meetings"],
- },
 };
 
 function isFrontlineRole(role?: AuthRole): role is FrontlineDashboardRole {
- return role === "Manager" || role === "Employee" || role === "HR" || role === "Finance" || role === "Sales" || role === "Support" || role === "Developer" || role === "Guest";
+ return role === "Manager" || role === "Employee" || role === "HR" || role === "Finance" || role === "Sales" || role === "Support" || role === "Developer";
 }
 
 function SetupStatus({ complete }: { complete: boolean }) {
@@ -280,9 +255,8 @@ function SetupStatus({ complete }: { complete: boolean }) {
 
 function OnboardingSetupCard({ session }: { session: JwtReadySession | null }) {
  const needsProfile = session?.user.isProfileComplete === false;
- const needsFace = session?.user.hasActiveFaceEnrollment === false;
 
- if (!needsProfile && !needsFace) {
+ if (!needsProfile) {
  return null;
  }
 
@@ -294,7 +268,7 @@ function OnboardingSetupCard({ session }: { session: JwtReadySession | null }) {
  <p className="text-sm font-semibold text-primary">Account setup</p>
  <h2 className="mt-2 text-xl font-bold tracking-normal">Finish your employee setup</h2>
  <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
- Complete your profile details and face setup to unlock attendance-ready account verification.
+ Complete your profile details to finish setting up your account.
  </p>
  <div className="mt-4 grid gap-3 sm:grid-cols-2">
  <div className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3">
@@ -304,44 +278,15 @@ function OnboardingSetupCard({ session }: { session: JwtReadySession | null }) {
  </span>
  <SetupStatus complete={!needsProfile} />
  </div>
- <div className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3">
- <span className="flex min-w-0 items-center gap-3">
- <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
- <span className="truncate text-sm font-semibold">Face setup</span>
- </span>
- <SetupStatus complete={!needsFace} />
- </div>
  </div>
  </div>
  <div className="flex shrink-0 flex-col gap-2 sm:flex-row xl:flex-col">
- {needsProfile ? (
  <Button asChild type="button">
  <Link to="/complete-profile">
  <UserRound className="h-4 w-4" />
  Complete Profile
  </Link>
  </Button>
- ) : (
- <Button disabled type="button" variant="outline">
- <UserRound className="h-4 w-4" />
- Complete Profile
- </Button>
- )}
- {needsFace ? (
- <Button asChild type="button">
- <Link to="/face-enrollment">
- <ShieldCheck className="h-4 w-4" />
- Set Up Face
- </Link>
- </Button>
- ) : (
- <Button asChild type="button" variant="outline">
- <Link to="/face-enrollment">
- <ShieldCheck className="h-4 w-4" />
- Manage Face
- </Link>
- </Button>
- )}
  </div>
  </div>
  </CardContent>

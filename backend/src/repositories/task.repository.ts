@@ -1,4 +1,4 @@
-import type { FilterQuery, SortOrder, UpdateQuery } from "mongoose";
+import { Types, type FilterQuery, type SortOrder, type UpdateQuery } from "mongoose";
 import { TaskModel, type Task, type TaskDocument } from "../models/task.model.js";
 import type { ListTasksQuery } from "../validation/task.validation.js";
 
@@ -28,6 +28,13 @@ function buildTaskFilter(query: ListTasksQuery, accessFilter: FilterQuery<Task> 
   if (query.epicId) filter.epicId = query.epicId;
   if (query.sprintId) filter.sprintId = query.sprintId;
   if (query.assigneeId) filter.assigneeId = query.assigneeId;
+  if (typeof query.isDailyTask === "boolean") filter.isDailyTask = query.isDailyTask;
+  if (query.dueDateFrom || query.dueDateTo) {
+    filter.dueDate = {
+      ...(query.dueDateFrom ? { $gte: query.dueDateFrom } : {}),
+      ...(query.dueDateTo ? { $lte: query.dueDateTo } : {}),
+    };
+  }
   if (typeof query.archived === "boolean") filter.isArchived = query.archived;
 
   return combineTaskFilters(filter, accessFilter);
@@ -113,6 +120,34 @@ export class TaskRepository {
     return TaskModel.updateMany(combineTaskFilters({ _id: { $in: ids } }, accessFilter), updates, {
       runValidators: true,
     });
+  }
+
+  async findDailyTasksForUser(userId: string, rangeStart: Date, rangeEnd: Date) {
+    return TaskModel.find({
+      assigneeId: userId,
+      isDailyTask: true,
+      dueDate: { $gte: rangeStart, $lte: rangeEnd },
+    }).lean();
+  }
+
+  async teamSummary(assigneeIds: string[]) {
+    if (assigneeIds.length === 0) return [];
+    const now = new Date();
+    return TaskModel.aggregate<{ _id: Types.ObjectId; total: number; completed: number; overdue: number }>([
+      { $match: { assigneeId: { $in: assigneeIds.map((id) => new Types.ObjectId(id)) }, isArchived: false } },
+      {
+        $group: {
+          _id: "$assigneeId",
+          total: { $sum: 1 },
+          completed: { $sum: { $cond: [{ $eq: ["$status", "Completed"] }, 1, 0] } },
+          overdue: {
+            $sum: {
+              $cond: [{ $and: [{ $ne: ["$status", "Completed"] }, { $lt: ["$dueDate", now] }] }, 1, 0],
+            },
+          },
+        },
+      },
+    ]);
   }
 
   async stats(accessFilter: FilterQuery<Task> = {}) {

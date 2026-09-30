@@ -1,9 +1,9 @@
 import {
  BarChart3,
- Bot,
  CalendarDays,
  Clock3,
  CheckSquare,
+ ContactRound,
  FileText,
  FolderKanban,
  Lock,
@@ -39,7 +39,6 @@ const adminNav = [
  label: "Control",
  items: [
  { label: "Dashboard", href: "/dashboard", icon: BarChart3 },
- { label: "AI Assistant", href: "/ai-assistant", icon: Bot },
  { label: "Admin Panel", href: "/admin", icon: ShieldCheck },
  { label: "Settings", href: "/settings", icon: Settings },
  { label: "Integrations", href: "/integrations", icon: Plug },
@@ -55,7 +54,12 @@ const adminNav = [
  { label: "Messenger", href: "/messenger", icon: MessageSquare },
  { label: "Employees", href: "/employees", icon: UsersRound },
  { label: "Attendance", href: "/attendance", icon: Clock3 },
- { label: "Analytics", href: "/analytics", icon: BarChart3 },
+ ],
+ },
+ {
+ label: "Customers",
+ items: [
+ { label: "CRM", href: "/crm", icon: ContactRound },
  ],
  },
 ];

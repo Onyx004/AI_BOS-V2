@@ -10,6 +10,7 @@ import {
   bulkDeleteTasksSchema,
   bulkUpdateTasksSchema,
   checklistToggleSchema,
+  createDailyTaskSchema,
   createTaskSchema,
   listTasksQuerySchema,
   logTimeSchema,
@@ -41,6 +42,11 @@ taskRoutes.get(
 );
 
 taskRoutes.get(
+  "/team/summary",
+  ...route(requirePermission("task.view_team"), taskController.teamSummary),
+);
+
+taskRoutes.get(
   "/export/csv",
   ...route(validate({ query: listTasksQuerySchema }), requirePermission("task.export"), taskController.exportCsv),
 );
@@ -63,6 +69,11 @@ taskRoutes.get(
 taskRoutes.post(
   "/",
   ...route(requirePermission("task.create"), validate({ body: createTaskSchema }), taskController.create),
+);
+
+taskRoutes.post(
+  "/daily",
+  ...route(validate({ body: createDailyTaskSchema }), taskController.createDaily),
 );
 
 taskRoutes.patch(

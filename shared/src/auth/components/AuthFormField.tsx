@@ -13,6 +13,8 @@ type AuthFormFieldProps = {
  type?: "email" | "password" | "text";
  placeholder?: string;
  autoComplete?: string;
+ inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+ maxLength?: number;
 };
 
 export function AuthFormField({
@@ -22,6 +24,8 @@ export function AuthFormField({
  type = "text",
  placeholder,
  autoComplete,
+ inputMode,
+ maxLength,
 }: AuthFormFieldProps) {
  const [showPassword, setShowPassword] = useState(false);
  const isPassword = type === "password";
@@ -37,6 +41,8 @@ export function AuthFormField({
  aria-invalid={Boolean(error)}
  autoComplete={autoComplete}
  className={cn(isPassword && "pr-11", error && "border-destructive focus-visible:ring-destructive/20")}
+ inputMode={inputMode}
+ maxLength={maxLength}
  placeholder={placeholder}
  type={isPassword && showPassword ? "text" : type}
  />

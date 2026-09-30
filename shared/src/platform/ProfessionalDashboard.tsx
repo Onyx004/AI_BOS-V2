@@ -3,22 +3,23 @@ import {
  CalendarCheck,
  ChevronLeft,
  ChevronRight,
+ ContactRound,
  Download,
  LogOut,
  Menu,
- MessageSquareText,
  Plus,
  RotateCcw,
  Sparkles,
  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clearAuthSession, getStoredAuthSession } from "@shared/auth/auth-service";
-import { AttendanceDrawer } from "@shared/attendance";
+import { usePermissions } from "@shared/auth/usePermissions";
+import { crmViewPermissions } from "@shared/crm/permissions";
 import { useIsTablet, useMediaQuery } from "@shared/hooks/useMediaQuery";
-import { aiAssistantOpenEvent, dashboardExportRequestEvent } from "@shared/platform/events";
+import { dashboardExportRequestEvent } from "@shared/platform/events";
 import { cn } from "@shared/lib/utils";
 import { Button } from "@shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/ui/card";
@@ -104,7 +105,6 @@ function Sidebar({
  config,
  mobileOpen,
  onCloseMobile,
- onOpenAttendance,
  onLogout,
  onToggle,
 }: {
@@ -112,13 +112,19 @@ function Sidebar({
  config: ProfessionalDashboardConfig;
  mobileOpen: boolean;
  onCloseMobile: () => void;
- onOpenAttendance: () => void;
  onLogout: () => void;
  onToggle: () => void;
 }) {
  const location = useLocation();
  const isTablet = useIsTablet();
  const brandName = getStoredAuthSession()?.user.companyName?.trim() || "AI BOS";
+ const { hasAnyPermission } = usePermissions();
+ // Employee app only (the admin app passes attendanceHref): a role granted CRM in the permission matrix gets a CRM link even though its dashboard config has none.
+ const showGrantedCrmLink = !config.attendanceHref && hasAnyPermission(...crmViewPermissions);
+ const navGroups = useMemo(() => {
+ if (!showGrantedCrmLink || config.navGroups.some((group) => group.items.some((item) => item.href === "/crm"))) return config.navGroups;
+ return [...config.navGroups, { label: "Customers", items: [{ label: "CRM", href: "/crm", icon: ContactRound }] }];
+ }, [config.navGroups, showGrantedCrmLink]);
  // Tablet (768–1023px) gets a persistent icon-rail, not the phone's off-canvas drawer.
  const effectiveCollapsed = collapsed || isTablet;
 
@@ -153,7 +159,7 @@ function Sidebar({
  </div>
 
  <nav aria-label={`${config.roleLabel} navigation`} className="mt-7 flex-1 space-y-6 overflow-y-auto pr-1">
- {config.navGroups.map((group) => (
+ {navGroups.map((group) => (
  <div key={group.label}>
  {!effectiveCollapsed && <p className="mb-2 px-3 text-[11px] font-bold uppercase text-muted-foreground">{group.label}</p>}
  <div className="space-y-1">
@@ -184,20 +190,7 @@ function Sidebar({
  </nav>
 
  <div className="space-y-2 border-t pt-4">
- <button
- aria-label={effectiveCollapsed ? "AI Analyzer" : undefined}
- className={cn(
- "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-primary transition-all hover:bg-primary/10",
- effectiveCollapsed && "justify-center px-0",
- )}
- onClick={() => window.dispatchEvent(new Event(aiAssistantOpenEvent))}
- title={effectiveCollapsed ? "AI Analyzer" : undefined}
- type="button"
- >
- <MessageSquareText className="h-4 w-4 shrink-0" />
- {!effectiveCollapsed && <span className="truncate">AI Analyzer</span>}
- </button>
- {config.attendanceHref ? (
+ {config.attendanceHref && (
  <Link
  aria-label={effectiveCollapsed ? "Attendance" : undefined}
  className={cn(
@@ -211,20 +204,6 @@ function Sidebar({
  <CalendarCheck className="h-4 w-4 shrink-0" />
  {!effectiveCollapsed && <span className="truncate">Attendance</span>}
  </Link>
- ) : (
- <button
- aria-label={effectiveCollapsed ? "Attendance" : undefined}
- className={cn(
- "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-muted-foreground transition-all hover:bg-muted hover:text-foreground",
- effectiveCollapsed && "justify-center px-0",
- )}
- onClick={() => { onOpenAttendance(); onCloseMobile(); }}
- title={effectiveCollapsed ? "Attendance" : undefined}
- type="button"
- >
- <CalendarCheck className="h-4 w-4 shrink-0" />
- {!effectiveCollapsed && <span className="truncate">Attendance</span>}
- </button>
  )}
  <button
  aria-label={effectiveCollapsed ? "Logout" : undefined}
@@ -268,7 +247,6 @@ function MobileSidebarToggle({ onOpenSidebar }: { onOpenSidebar: () => void }) {
 export function ProfessionalDashboard({ config, leadingContent }: { config: ProfessionalDashboardConfig; leadingContent?: ReactNode }) {
  const [collapsed, setCollapsed] = useState(false);
  const [mobileOpen, setMobileOpen] = useState(false);
- const [attendanceOpen, setAttendanceOpen] = useState(false);
  const [completed, setCompleted] = useState<string[]>(() => readCompletedTasks(`${config.storageKey}-completed`));
  const [hiddenInsights, setHiddenInsights] = useState(false);
  const navigate = useNavigate();
@@ -276,7 +254,7 @@ export function ProfessionalDashboard({ config, leadingContent }: { config: Prof
  const isDockedNav = useMediaQuery("(min-width: 768px)");
  const session = getStoredAuthSession();
  const { toast } = useToast();
- const roleLabel = session?.user.role ?? config.roleLabel;
+ const roleLabel = session?.user.roleName ?? session?.user.role ?? config.roleLabel;
 
  useEffect(() => {
  window.localStorage.setItem(`${config.storageKey}-completed`, JSON.stringify(completed));
@@ -328,7 +306,6 @@ export function ProfessionalDashboard({ config, leadingContent }: { config: Prof
  config={config}
  mobileOpen={mobileOpen}
  onCloseMobile={() => setMobileOpen(false)}
- onOpenAttendance={() => setAttendanceOpen(true)}
  onLogout={logout}
  onToggle={() => setCollapsed((value) => !value)}
  />
@@ -500,7 +477,6 @@ export function ProfessionalDashboard({ config, leadingContent }: { config: Prof
  </div>
  </div>
  </aside>
- {!config.attendanceHref && <AttendanceDrawer onClose={() => setAttendanceOpen(false)} open={attendanceOpen} />}
  </div>
  </div>
  </div>

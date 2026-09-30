@@ -7,10 +7,12 @@ export type PermissionModule =
   | "Approval"
   | "Project"
   | "Task"
-  | "Lead"
+  | "CRM"
   | "Finance"
   | "Workflow"
   | "Document"
+  | "Product"
+  | "Meeting"
   | "Analytics"
   | "Integration"
   | "User Management"
@@ -82,14 +84,45 @@ export const permissionCatalog: PermissionCatalogEntry[] = [
   { key: "task.bulk_delete", module: "Task", label: "Bulk delete tasks", description: "Remove multiple tasks at once." },
   { key: "task.log_time", module: "Task", label: "Log time on task", description: "Log time entries against a task." },
   { key: "task.comment", module: "Task", label: "Comment on task", description: "Post comments on a task." },
+  { key: "task.view_team", module: "Task", label: "View team tasks", description: "See a list of people whose tasks you can view, with per-person task summaries, and assign them tasks." },
   { key: "project.comment", module: "Project", label: "Comment on project", description: "Post comments on a project." },
 
   // Lead
-  { key: "lead.view_all", module: "Lead", label: "View leads", description: "View the CRM lead list and lead details." },
-  { key: "lead.view_stats", module: "Lead", label: "View lead stats", description: "View aggregate lead/pipeline statistics." },
-  { key: "lead.create", module: "Lead", label: "Create lead", description: "Create new CRM leads." },
-  { key: "lead.update", module: "Lead", label: "Update lead", description: "Edit leads, including status and owner assignment." },
-  { key: "lead.delete", module: "Lead", label: "Delete lead", description: "Remove CRM leads." },
+  { key: "lead.view_all", module: "CRM", label: "View leads", description: "View the CRM lead list and lead details." },
+  { key: "lead.view_stats", module: "CRM", label: "View lead stats", description: "View aggregate lead/pipeline statistics." },
+  { key: "lead.create", module: "CRM", label: "Create lead", description: "Create new CRM leads." },
+  { key: "lead.update", module: "CRM", label: "Update lead", description: "Edit leads, including status and owner assignment." },
+  { key: "lead.delete", module: "CRM", label: "Delete lead", description: "Remove CRM leads." },
+
+  // CRM (read = view, write = create, update, delete)
+  { key: "customer.view", module: "CRM", label: "View customers", description: "View the customers list and details in CRM." },
+  { key: "customer.create", module: "CRM", label: "Create customer", description: "Add new customers in CRM." },
+  { key: "customer.update", module: "CRM", label: "Update customer", description: "Edit existing customers in CRM." },
+  { key: "customer.delete", module: "CRM", label: "Delete customer", description: "Remove customers from CRM." },
+  { key: "company.view", module: "CRM", label: "View companies", description: "View the companies list and details in CRM." },
+  { key: "company.create", module: "CRM", label: "Create company", description: "Add new companies in CRM." },
+  { key: "company.update", module: "CRM", label: "Update company", description: "Edit existing companies in CRM." },
+  { key: "company.delete", module: "CRM", label: "Delete company", description: "Remove companies from CRM." },
+  { key: "contact.view", module: "CRM", label: "View contacts", description: "View the contacts list and details in CRM." },
+  { key: "contact.create", module: "CRM", label: "Create contact", description: "Add new contacts in CRM." },
+  { key: "contact.update", module: "CRM", label: "Update contact", description: "Edit existing contacts in CRM." },
+  { key: "contact.delete", module: "CRM", label: "Delete contact", description: "Remove contacts from CRM." },
+  { key: "deal.view", module: "CRM", label: "View deals and opportunities", description: "View the deals and opportunities list and details in CRM." },
+  { key: "deal.create", module: "CRM", label: "Create deal", description: "Add new deals and opportunities in CRM." },
+  { key: "deal.update", module: "CRM", label: "Update deal", description: "Edit existing deals and opportunities in CRM." },
+  { key: "deal.delete", module: "CRM", label: "Delete deal", description: "Remove deals and opportunities from CRM." },
+  { key: "quote.view", module: "CRM", label: "View quotes", description: "View the quotes list and details in CRM." },
+  { key: "quote.create", module: "CRM", label: "Create quote", description: "Add new quotes in CRM." },
+  { key: "quote.update", module: "CRM", label: "Update quote", description: "Edit existing quotes in CRM." },
+  { key: "quote.delete", module: "CRM", label: "Delete quote", description: "Remove quotes from CRM." },
+  { key: "followup.view", module: "CRM", label: "View follow-ups", description: "View the follow-ups list and details in CRM." },
+  { key: "followup.create", module: "CRM", label: "Create follow-up", description: "Add new follow-ups in CRM." },
+  { key: "followup.update", module: "CRM", label: "Update follow-up", description: "Edit existing follow-ups in CRM." },
+  { key: "followup.delete", module: "CRM", label: "Delete follow-up", description: "Remove follow-ups from CRM." },
+  { key: "crm_meeting.view", module: "CRM", label: "View CRM meetings", description: "View the CRM meetings list and details in CRM." },
+  { key: "crm_meeting.create", module: "CRM", label: "Create CRM meeting", description: "Add new CRM meetings in CRM." },
+  { key: "crm_meeting.update", module: "CRM", label: "Update CRM meeting", description: "Edit existing CRM meetings in CRM." },
+  { key: "crm_meeting.delete", module: "CRM", label: "Delete CRM meeting", description: "Remove CRM meetings from CRM." },
 
   // Finance
   { key: "finance.view", module: "Finance", label: "View finance records", description: "View income, expenses, invoices, payments, taxes, and budgets." },
@@ -108,7 +141,23 @@ export const permissionCatalog: PermissionCatalogEntry[] = [
   { key: "workflow.execute", module: "Workflow", label: "Execute workflow", description: "Run a workflow." },
 
   // Document
-  { key: "document.upload", module: "Document", label: "Upload document", description: "Upload files (reserved for future dedicated document management)." },
+  { key: "document.view_all", module: "Document", label: "View documents", description: "View the document catalog and file metadata." },
+  { key: "document.upload", module: "Document", label: "Upload document", description: "Upload new files into the document catalog." },
+  { key: "document.update", module: "Document", label: "Update document", description: "Edit document metadata, tags, and sharing." },
+  { key: "document.delete", module: "Document", label: "Delete document", description: "Remove documents." },
+  { key: "document.download", module: "Document", label: "Download document", description: "Download a document's file." },
+
+  // Product
+  { key: "product.view_all", module: "Product", label: "View products", description: "View the product catalog." },
+  { key: "product.create", module: "Product", label: "Create product", description: "Create new products." },
+  { key: "product.update", module: "Product", label: "Update product", description: "Edit existing products." },
+  { key: "product.delete", module: "Product", label: "Delete product", description: "Remove products." },
+
+  // Meeting
+  { key: "meeting.view_all", module: "Meeting", label: "View meetings", description: "View scheduled and synced meetings." },
+  { key: "meeting.create", module: "Meeting", label: "Create meeting", description: "Schedule new meetings." },
+  { key: "meeting.update", module: "Meeting", label: "Update meeting", description: "Edit existing meetings." },
+  { key: "meeting.delete", module: "Meeting", label: "Delete meeting", description: "Remove meetings." },
 
   // Analytics
   { key: "analytics.view", module: "Analytics", label: "View analytics", description: "View business analytics dashboards." },
@@ -163,3 +212,13 @@ export const permissionKeys = permissionCatalog.map((entry) => entry.key) as [st
 export type PermissionKey = (typeof permissionKeys)[number];
 
 
+
+export const crmResourcePermissionPrefixes = ["customer", "company", "contact", "deal", "quote", "followup", "crm_meeting"] as const;
+
+/** Every CRM permission key, including the pre-existing lead.* set. */
+export const crmPermissionKeys: string[] = permissionCatalog.filter((entry) => entry.module === "CRM").map((entry) => entry.key);
+
+/** What the built-in Sales role gets by default: read/write/update everything, but no deletes and no quotes. */
+export const salesDefaultCrmPermissionKeys: string[] = crmPermissionKeys.filter(
+  (key) => !key.endsWith(".delete") && !key.startsWith("quote."),
+);

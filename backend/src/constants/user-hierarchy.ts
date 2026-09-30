@@ -6,8 +6,8 @@ import { type UserRole } from "./roles.js";
  * even though those roles rank lower, so it can't be derived from Role.rank alone.
  */
 export const assignableRolesByRole: Partial<Record<UserRole, UserRole[]>> = {
-  Owner: ["Manager", "HR", "Employee", "Sales"],
-  Administrator: ["Manager", "HR", "Employee", "Sales"],
+  Owner: ["Manager", "HR", "Employee", "Sales", "Finance", "Support", "Developer"],
+  Administrator: ["Manager", "HR", "Employee", "Sales", "Finance", "Support", "Developer"],
   Manager: ["HR", "Employee", "Sales"],
   HR: ["Employee", "Sales"],
 };

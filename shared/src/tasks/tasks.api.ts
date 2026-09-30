@@ -194,6 +194,19 @@ export type TaskListQuery = {
  epicId?: string;
  sprintId?: string;
  assigneeId?: string;
+ isDailyTask?: boolean;
+ dueDateFrom?: string;
+ dueDateTo?: string;
+};
+
+export type TeamTaskSummary = {
+ id: string;
+ fullName: string;
+ email: string;
+ role: string;
+ totalTasks: number;
+ completedTasks: number;
+ overdueTasks: number;
 };
 
 function toQueryString(query?: TaskListQuery) {
@@ -228,8 +241,17 @@ export function fetchTaskStats() {
  return fetchJson<TaskStats>("/tasks/stats");
 }
 
+export function fetchTeamTaskSummary() {
+ return fetchJson<TeamTaskSummary[]>("/tasks/team/summary");
+}
+
 export async function createTask(input: Record<string, unknown>) {
  const record = await sendJson<BackendTask>("/tasks", "POST", input);
+ return toTask(record);
+}
+
+export async function createDailyTask(title: string) {
+ const record = await sendJson<BackendTask>("/tasks/daily", "POST", { title });
  return toTask(record);
 }
 

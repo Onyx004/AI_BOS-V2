@@ -8,7 +8,7 @@ export type AttendanceLocation = {
 };
 
 export type AttendanceStatus = "Present" | "Checked Out";
-export type AttendanceVerificationMethod = "face" | "manual";
+export type AttendanceVerificationMethod = "face" | "manual" | "daily_task" | "login" | "auto_offline";
 
 export type Attendance = {
   userId: Types.ObjectId;
@@ -16,7 +16,7 @@ export type Attendance = {
   status: AttendanceStatus;
   checkInAt: Date;
   checkOutAt?: Date;
-  checkInLocation: AttendanceLocation;
+  checkInLocation?: AttendanceLocation;
   checkOutLocation?: AttendanceLocation;
   checkInMethod: AttendanceVerificationMethod;
   checkOutMethod?: AttendanceVerificationMethod;
@@ -57,10 +57,10 @@ const attendanceSchema = new Schema<Attendance>(
     status: { type: String, enum: ["Present", "Checked Out"], default: "Present", index: true },
     checkInAt: { type: Date, required: true },
     checkOutAt: { type: Date },
-    checkInLocation: { type: attendanceLocationSchema, required: true },
+    checkInLocation: { type: attendanceLocationSchema },
     checkOutLocation: { type: attendanceLocationSchema },
-    checkInMethod: { type: String, enum: ["face", "manual"], required: true, default: "face", index: true },
-    checkOutMethod: { type: String, enum: ["face", "manual"], index: true },
+    checkInMethod: { type: String, enum: ["face", "manual", "daily_task", "login", "auto_offline"], required: true, default: "face", index: true },
+    checkOutMethod: { type: String, enum: ["face", "manual", "daily_task", "login", "auto_offline"], index: true },
     checkInManualReason: { type: String, trim: true, maxlength: 240 },
     checkOutManualReason: { type: String, trim: true, maxlength: 240 },
     checkInFaceVerified: { type: Boolean, default: false },

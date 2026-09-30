@@ -1,4 +1,4 @@
-export const authRoles = ["Owner", "Administrator", "Manager", "HR", "Finance", "Sales", "Support", "Developer", "Employee", "Guest"] as const;
+export const authRoles = ["Owner", "Administrator", "Manager", "HR", "Finance", "Sales", "Support", "Developer", "Employee"] as const;
 
 export type AuthRole = (typeof authRoles)[number];
 
@@ -10,6 +10,8 @@ export type JwtReadySession = {
  user: {
  email: string;
  role: AuthRole;
+ /** Only for custom roles: the real role name. `role` is then "Employee" so the Employee workspace opens. */
+ roleName?: string;
  fullName: string;
  permissions?: string[];
  companyName?: string;

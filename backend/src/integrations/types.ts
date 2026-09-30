@@ -22,5 +22,5 @@ export type ProviderDefinition = {
   oauth?: ProviderOAuthConfig;
   integrations: ProviderIntegrationMeta[];
   testConnection?: (accessToken: string) => Promise<ProviderTestResult>;
-  sync?: (accessToken: string, integrationKey: IntegrationKey) => Promise<ProviderSyncResult>;
+  sync?: (accessToken: string, integrationKey: IntegrationKey, context: { organizationId: string }) => Promise<ProviderSyncResult>;
 };

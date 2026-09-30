@@ -30,13 +30,6 @@ export const faceVerificationSchema = z.object({
 
 export const issueFaceChallengeSchema = z.object({ action: attendanceActionSchema });
 export const attendanceMarkSchema = attendanceLocationSchema.extend({ verification: faceVerificationSchema });
-export const manualAttendanceMarkSchema = attendanceLocationSchema.extend({
-  reason: z.string().trim().min(8, "Explain why face verification could not be completed").max(240),
-});
-
-export const attendanceHistoryQuerySchema = z.object({
-  limit: z.coerce.number().int().positive().max(200).default(100),
-});
 
 export const attendanceSummaryQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -46,15 +39,13 @@ export const attendanceAdminOverviewQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   search: z.string().trim().max(120).optional(),
   status: z.enum(["Present", "Checked Out"]).optional(),
-  method: z.enum(["face", "manual"]).optional(),
+  method: z.enum(["face", "manual", "daily_task", "login", "auto_offline"]).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(200).default(50),
 });
 
 export type AttendanceLocationInput = z.infer<typeof attendanceLocationSchema>;
 export type AttendanceMarkInput = z.infer<typeof attendanceMarkSchema>;
-export type ManualAttendanceMarkInput = z.infer<typeof manualAttendanceMarkSchema>;
-export type AttendanceHistoryQuery = z.infer<typeof attendanceHistoryQuerySchema>;
 export type AttendanceSummaryQuery = z.infer<typeof attendanceSummaryQuerySchema>;
 export type AttendanceAdminOverviewQuery = z.infer<typeof attendanceAdminOverviewQuerySchema>;
 export type FaceLivenessEvidence = z.infer<typeof faceLivenessEvidenceSchema>;

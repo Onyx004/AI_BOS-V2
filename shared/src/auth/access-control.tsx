@@ -13,12 +13,27 @@ export function roleHasAccess(role: AuthRole | undefined, allowedRoles: readonly
  return (allowFullAccessBypass && fullAccessRoles.includes(role)) || allowedRoles.includes(role);
 }
 
-export function filterByRole<T extends { roles?: readonly AuthRole[] }>(
+/** True when the user holds at least one of `permissions` (granted per role in the permission matrix). */
+export function hasAnyPermissionKey(userPermissions: readonly string[] | undefined, permissions: readonly string[] | undefined) {
+ return Boolean(permissions?.some((key) => userPermissions?.includes(key)));
+}
+
+/**
+ * Keeps items the role may see. An item with `permissions` is also visible to any role that holds one
+ * of those permissions, so the permission matrix can grant a module beyond its default roles.
+ */
+export function filterByRole<T extends { roles?: readonly AuthRole[]; permissions?: readonly string[] }>(
  items: readonly T[],
  role?: AuthRole,
  allowFullAccessBypass = true,
+ userPermissions?: readonly string[],
 ) {
- return items.filter((item) => !item.roles || roleHasAccess(role, item.roles, allowFullAccessBypass));
+ return items.filter(
+ (item) =>
+ !item.roles ||
+ roleHasAccess(role, item.roles, allowFullAccessBypass) ||
+ hasAnyPermissionKey(userPermissions, item.permissions),
+ );
 }
 
 export function getStoredAuthRole() {
@@ -27,6 +42,7 @@ export function getStoredAuthRole() {
 
 export function RequireAuth({
   allowedRoles,
+  allowedPermissions,
   allowFullAccessBypass = true,
   children,
   requireProfileComplete = true,
@@ -35,6 +51,8 @@ export function RequireAuth({
   loginPath = "/login",
 }: {
   allowedRoles: readonly AuthRole[];
+  /** Roles outside `allowedRoles` still get in when the permission matrix grants them one of these. */
+  allowedPermissions?: readonly string[];
   allowFullAccessBypass?: boolean;
   children: ReactNode;
   requireProfileComplete?: boolean;
@@ -49,7 +67,7 @@ export function RequireAuth({
  return <Navigate replace state={{ from: location.pathname }} to={loginPath} />;
  }
 
-  if (!roleHasAccess(session.user.role, allowedRoles, allowFullAccessBypass)) {
+  if (!roleHasAccess(session.user.role, allowedRoles, allowFullAccessBypass) && !hasAnyPermissionKey(session.user.permissions, allowedPermissions)) {
  if (fallbackPath === location.pathname) {
  return <AccessDenied />;
  }

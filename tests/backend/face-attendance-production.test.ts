@@ -70,14 +70,12 @@ test("administrative biometric endpoints deny Manager and allow Owner or Adminis
   assert.match(routes, /requireRole\("Owner", "Administrator"\)/);
 });
 
-test("manual fallback remains authenticated, labeled, reason-required, and audited", async () => {
-  const { manualAttendanceMarkSchema } = await import("../../backend/src/validation/attendance.validation.ts");
-  assert.equal(manualAttendanceMarkSchema.safeParse({ latitude: 1, longitude: 1, reason: "camera" }).success, false);
-  assert.equal(manualAttendanceMarkSchema.safeParse({ latitude: 1, longitude: 1, reason: "Camera permission is unavailable" }).success, true);
+test("attendance is login-based: manual and daily-task marking are gone, presence heartbeat is authenticated", () => {
   const routes = fs.readFileSync(path.join(root, "backend/src/routes/attendance.routes.ts"), "utf8");
   assert.match(routes, /attendanceRoutes\.use\(authenticate\)/);
-  assert.match(routes, /\/manual\/check-in/);
-  assert.match(routes, /\/manual\/check-out/);
+  assert.doesNotMatch(routes, /\/manual\/check-(in|out)/);
+  assert.doesNotMatch(routes, /\/daily-task\/check-(in|out)/);
+  assert.match(routes, /\/heartbeat/);
 });
 
 test("successful 1:1 verification records server attendance and duplicate punches are rejected", async () => {

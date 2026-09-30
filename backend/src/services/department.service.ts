@@ -117,25 +117,32 @@ export class DepartmentService {
     return department;
   }
 
-  async delete(id: string) {
-    const [hasTeams, hasUsers, hasChildren] = await Promise.all([
-      teamRepository.existsForDepartment(id),
-      userRepository.existsWithFilter({ departmentId: id }),
-      departmentRepository.existsAsParent(id),
-    ]);
+  async delete(id: string, options: { deleteTeams?: boolean } = {}) {
+    const existing = await departmentRepository.findById(id);
+    if (!existing) {
+      throw new AppError("Department not found", 404);
+    }
 
-    if (hasTeams || hasUsers || hasChildren) {
+    // Deleting teams takes their lead-access and chat rooms with them, so the caller must confirm it explicitly.
+    const teams = await teamRepository.listByDepartment(id);
+    if (teams.length > 0 && !options.deleteTeams) {
+      const names = teams.map((team) => team.name).join(", ");
       throw new AppError(
-        "Cannot delete a department with active teams, employees, or sub-departments",
+        `This department has ${teams.length} team${teams.length === 1 ? "" : "s"} (${names}). Confirm deleting them together with the department.`,
         409,
       );
     }
+
+    const unassignedEmployees = await userRepository.clearDepartment(id);
+    const deletedTeams = teams.length > 0 ? await teamRepository.deleteByDepartment(id) : [];
+    await userRepository.removeTeams(deletedTeams.map((team) => team._id));
+    await departmentRepository.detachChildren(id);
 
     const department = await departmentRepository.delete(id);
     if (!department) {
       throw new AppError("Department not found", 404);
     }
-    return { deleted: true };
+    return { deleted: true, unassignedEmployees, deletedTeams: deletedTeams.length };
   }
 }
 

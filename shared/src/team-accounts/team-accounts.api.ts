@@ -1,6 +1,5 @@
 import { getApiBaseUrl } from "@shared/lib/env";
 import { getStoredAuthSession, isSessionExpired, refreshSession } from "@shared/auth/auth-service";
-import type { AuthRole } from "@shared/auth/types";
 import { notifyEmployeeDirectoryChanged } from "@shared/employees/employees.api";
 import type { CreateProfileFormValues, TeamAccount } from "./team-accounts.schema";
 
@@ -36,7 +35,7 @@ async function fetchWithStatus<T>(endpoint: string): Promise<TeamAccountsResult<
 }
 
 export function fetchAssignableRoles() {
- return fetchWithStatus<AuthRole[]>("/users/assignable-roles");
+ return fetchWithStatus<string[]>("/users/assignable-roles");
 }
 
 export function fetchTeamAccounts() {

@@ -1,7 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Camera } from "lucide-react";
+import { useRef, useState } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { z } from "zod";
-import { changePassword } from "@shared/auth/auth-service";
+import { changePassword, updateStoredSessionUser } from "@shared/auth/auth-service";
+import { updateOwnProfile } from "@shared/profile/own-profile.api";
 import { Button } from "@shared/ui/button";
 import { Label } from "@shared/ui/label";
 import { PasswordInput } from "@shared/ui/password-input";
@@ -18,6 +21,8 @@ const changePasswordFormSchema = z
  .regex(/[0-9]/, "Password needs one number")
  .regex(/[^A-Za-z0-9]/, "Password needs one special character"),
  confirmPassword: z.string().min(1, "Confirm your new password"),
+ pin: z.string().optional(),
+ confirmPin: z.string().optional(),
  })
  .refine((data) => data.newPassword === data.confirmPassword, {
  message: "Passwords do not match",
@@ -26,8 +31,12 @@ const changePasswordFormSchema = z
 
 type ChangePasswordFormValues = z.infer<typeof changePasswordFormSchema>;
 
-export function ChangePasswordCard({ onChanged }: { onChanged?: () => void | Promise<void> }) {
+/** `firstLogin` adds the one-time account setup on top of the password change: a 6-digit sign-in PIN and a profile photo. */
+export function ChangePasswordCard({ onChanged, firstLogin = false }: { onChanged?: () => void | Promise<void>; firstLogin?: boolean }) {
  const { toast } = useToast();
+ const fileInputRef = useRef<HTMLInputElement>(null);
+ const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+ const [avatarError, setAvatarError] = useState<string | null>(null);
  const {
  formState: { errors, isSubmitting },
  handleSubmit,
@@ -36,12 +45,49 @@ export function ChangePasswordCard({ onChanged }: { onChanged?: () => void | Pro
  setError,
  } = useForm<ChangePasswordFormValues>({
  resolver: zodResolver(changePasswordFormSchema),
- defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
+ defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "", pin: "", confirmPin: "" },
  });
 
+ const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+ const file = event.target.files?.[0];
+ event.target.value = "";
+ if (!file) return;
+ setAvatarError(null);
+ if (!file.type.startsWith("image/")) {
+ setAvatarError("Please choose an image file.");
+ return;
+ }
+ if (file.size > 2_000_000) {
+ setAvatarError("Photo is too large. Please choose an image under 2MB.");
+ return;
+ }
+ const reader = new FileReader();
+ reader.onload = () => setAvatarPreview(String(reader.result));
+ reader.onerror = () => setAvatarError("Could not read that image. Please try another.");
+ reader.readAsDataURL(file);
+ };
+
  const onSubmit: SubmitHandler<ChangePasswordFormValues> = async (values) => {
+ if (firstLogin) {
+ if (!/^\d{6}$/.test(values.pin ?? "")) {
+ setError("pin", { message: "PIN must be exactly 6 digits" }, { shouldFocus: true });
+ return;
+ }
+ if (values.pin !== values.confirmPin) {
+ setError("confirmPin", { message: "PINs do not match" }, { shouldFocus: true });
+ return;
+ }
+ }
  try {
- await changePassword(values.currentPassword, values.newPassword);
+ await changePassword(values.currentPassword, values.newPassword, firstLogin ? values.pin : undefined);
+ if (firstLogin && avatarPreview) {
+ try {
+ const updated = await updateOwnProfile({ avatar: avatarPreview });
+ updateStoredSessionUser({ avatar: updated.avatar?.startsWith("data:image/") ? updated.avatar : undefined });
+ } catch (error) {
+ toast({ title: "Photo not saved", description: `${(error as Error).message} You can add it later from your profile.`, type: "error" });
+ }
+ }
  toast({ title: "Password changed", description: "Use your new password next time you sign in.", type: "success" });
  reset();
  await onChanged?.();
@@ -58,7 +104,7 @@ export function ChangePasswordCard({ onChanged }: { onChanged?: () => void | Pro
  return (
  <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
  <div className="space-y-2">
- <Label htmlFor="currentPassword">Current password</Label>
+ <Label htmlFor="currentPassword">{firstLogin ? "Temporary password" : "Current password"}</Label>
  <PasswordInput id="currentPassword" {...register("currentPassword")} />
  {errors.currentPassword && <p className="text-xs font-medium text-destructive">{errors.currentPassword.message}</p>}
  </div>
@@ -76,8 +122,38 @@ export function ChangePasswordCard({ onChanged }: { onChanged?: () => void | Pro
  </div>
  </div>
 
+ {firstLogin && (
+ <>
+ <div className="grid gap-4 sm:grid-cols-2">
+ <div className="space-y-2">
+ <Label htmlFor="pin">6-digit PIN</Label>
+ <PasswordInput autoComplete="off" id="pin" inputMode="numeric" maxLength={6} {...register("pin")} />
+ {errors.pin && <p className="text-xs font-medium text-destructive">{errors.pin.message}</p>}
+ </div>
+ <div className="space-y-2">
+ <Label htmlFor="confirmPin">Confirm PIN</Label>
+ <PasswordInput autoComplete="off" id="confirmPin" inputMode="numeric" maxLength={6} {...register("confirmPin")} />
+ {errors.confirmPin && <p className="text-xs font-medium text-destructive">{errors.confirmPin.message}</p>}
+ </div>
+ </div>
+ <div className="space-y-2">
+ <Label>Profile photo</Label>
+ <div className="flex items-center gap-4">
+ <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-primary/10 text-primary">
+ {avatarPreview ? <img alt="Profile preview" className="h-full w-full object-cover" src={avatarPreview} /> : <Camera className="h-5 w-5" />}
+ </span>
+ <input accept="image/*" className="hidden" onChange={handleAvatarChange} ref={fileInputRef} type="file" />
+ <Button onClick={() => fileInputRef.current?.click()} type="button" variant="outline">
+ {avatarPreview ? "Change photo" : "Upload photo"}
+ </Button>
+ </div>
+ {avatarError && <p className="text-xs font-medium text-destructive">{avatarError}</p>}
+ </div>
+ </>
+ )}
+
  <Button disabled={isSubmitting} type="submit">
- {isSubmitting ? "Changing..." : "Change password"}
+ {isSubmitting ? "Saving..." : firstLogin ? "Save and continue" : "Change password"}
  </Button>
  </form>
  );

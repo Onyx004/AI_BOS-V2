@@ -11,7 +11,7 @@ export const employeeFormSchema = z.object({
  .regex(/[a-z]/, "Password needs one lowercase letter")
  .regex(/[0-9]/, "Password needs one number")
  .regex(/[^A-Za-z0-9]/, "Password needs one special character"),
- role: z.enum(authRoles, { message: "Choose a role" }),
+ role: z.string().min(1, "Choose a role"),
  phone: z.string().min(1, "Enter a phone number"),
  department: z.string(),
 });

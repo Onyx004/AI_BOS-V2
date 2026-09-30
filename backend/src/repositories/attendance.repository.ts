@@ -29,6 +29,26 @@ export class AttendanceRepository {
       .lean();
   }
 
+  async findOpen() {
+    return AttendanceModel.find({ status: "Present", checkOutAt: { $exists: false } })
+      .select("userId date checkInAt")
+      .lean();
+  }
+
+  async closeOpenRecord(id: string, checkOutAt: Date) {
+    return AttendanceModel.updateOne(
+      { _id: id, checkOutAt: { $exists: false } },
+      { $set: { status: "Checked Out", checkOutAt, checkOutMethod: "auto_offline" } },
+    );
+  }
+
+  async reopenAutoClosed(userId: string, date: string) {
+    return AttendanceModel.updateOne(
+      { userId, date, checkOutMethod: "auto_offline" },
+      { $set: { status: "Present" }, $unset: { checkOutAt: "", checkOutMethod: "" } },
+    );
+  }
+
   async updateByUserAndDate(userId: string, date: string, updates: UpdateQuery<AttendanceDocument>) {
     return AttendanceModel.findOneAndUpdate({ userId, date }, updates, {
       new: true,

@@ -29,7 +29,7 @@ export const adminModules: AdminModule[] = [
  key: "role",
  label: "Role",
  type: "select",
- options: ["Owner", "Administrator", "Manager", "HR", "Finance", "Sales", "Support", "Developer", "Employee", "Guest"],
+ options: ["Owner", "Administrator", "Manager", "HR", "Finance", "Sales", "Support", "Developer", "Employee"],
  required: true,
  },
  { key: "department", label: "Department", type: "select", options: ["Executive", "Engineering", "Product", "Design", "Operations", "Human Resources", "Finance", "Sales", "Customer Success", "Unassigned"] },
@@ -45,6 +45,7 @@ export const adminModules: AdminModule[] = [
  label: "Projects",
  description: "Control project records, ownership, budget, and status.",
  icon: FolderKanban,
+ route: "/projects",
  permissions: [...standardPermissions],
  fields: [
  { key: "name", label: "Project Name", type: "text", required: true },
@@ -57,9 +58,10 @@ export const adminModules: AdminModule[] = [
  },
  {
  id: "customers",
- label: "Customers",
- description: "Manage CRM customer accounts, health, and revenue ownership.",
+ label: "CRM",
+ description: "Leads, customers, companies, contacts, deals, quotes, follow-ups, and meetings.",
  icon: ContactRound,
+ route: "/crm",
  permissions: [...standardPermissions],
  fields: [
  { key: "name", label: "Customer", type: "text", required: true },
@@ -75,6 +77,7 @@ export const adminModules: AdminModule[] = [
  label: "Products",
  description: "Manage products, inventory, suppliers, and SKU records.",
  icon: Package,
+ route: "/products",
  permissions: [...standardPermissions],
  fields: [
  { key: "name", label: "Product", type: "text", required: true },
@@ -90,6 +93,7 @@ export const adminModules: AdminModule[] = [
  label: "Documents",
  description: "Manage files, tags, sharing, and permission states.",
  icon: FileText,
+ route: "/documents",
  permissions: [...standardPermissions],
  fields: [
  { key: "name", label: "Document", type: "text", required: true },
@@ -105,6 +109,7 @@ export const adminModules: AdminModule[] = [
  label: "Meetings",
  description: "Manage meeting schedules, links, participants, and status.",
  icon: CalendarDays,
+ route: "/meetings",
  permissions: [...standardPermissions],
  fields: [
  { key: "title", label: "Title", type: "text", required: true },
@@ -120,6 +125,7 @@ export const adminModules: AdminModule[] = [
  label: "Finance",
  description: "Manage finance records, invoices, payments, taxes, and budgets.",
  icon: WalletCards,
+ route: "/finance",
  permissions: [...standardPermissions, "restore"],
  fields: [
  { key: "name", label: "Record", type: "text", required: true },
@@ -135,6 +141,7 @@ export const adminModules: AdminModule[] = [
  label: "Settings",
  description: "Manage application, company, security, and email configuration.",
  icon: Settings,
+ route: "/admin/organization",
  permissions: [...fullPermissions],
  fields: [
  { key: "name", label: "Setting", type: "text", required: true },
@@ -148,5 +155,5 @@ export const adminModules: AdminModule[] = [
 
 export const adminSystemCards = [
  { label: "Managed Modules", value: String(adminModules.length), icon: Building2 },
- { label: "API-Backed Modules", value: "1", icon: ShieldCheck },
+ { label: "API-Backed Modules", value: String(adminModules.length), icon: ShieldCheck },
 ];

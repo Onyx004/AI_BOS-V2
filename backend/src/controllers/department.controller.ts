@@ -24,7 +24,7 @@ export class DepartmentController {
   );
 
   delete = jsonController(200, "Department deleted successfully", ({ req }) =>
-    departmentService.delete(req.params.id),
+    departmentService.delete(req.params.id, { deleteTeams: Boolean((req.query as { deleteTeams?: boolean }).deleteTeams) }),
   );
 }
 

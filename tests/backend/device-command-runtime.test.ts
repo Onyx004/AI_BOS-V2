@@ -278,6 +278,7 @@ test("existing Administrator access migrates once and later Owner policy remains
     "../../backend/src/models/administrator-monitoring-access.model.ts"
   );
   const { UserModel } = await import("../../backend/src/models/user.model.ts");
+  const { RoleModel } = await import("../../backend/src/models/role.model.ts");
   const { applyRuntimeMigrations } = await import(
     "../../backend/src/database/runtime-migrations.ts"
   );
@@ -287,6 +288,7 @@ test("existing Administrator access migrates once and later Owner policy remains
     createMigration: RuntimeMigrationModel.create,
     findUsers: UserModel.find,
     bulkWrite: AdministratorMonitoringAccessModel.bulkWrite,
+    updateRole: RoleModel.updateOne,
   };
 
   let migrationApplied = false;
@@ -308,6 +310,7 @@ test("existing Administrator access migrates once and later Owner policy remains
     writes.push(...operations);
     return {};
   }) as any;
+  RoleModel.updateOne = (async () => ({})) as any;
 
   try {
     await applyRuntimeMigrations();
@@ -332,5 +335,6 @@ test("existing Administrator access migrates once and later Owner policy remains
     RuntimeMigrationModel.create = original.createMigration;
     UserModel.find = original.findUsers;
     AdministratorMonitoringAccessModel.bulkWrite = original.bulkWrite;
+    RoleModel.updateOne = original.updateRole;
   }
 });

@@ -1,11 +1,20 @@
 import type { Types } from "mongoose";
+import { getDefaultPermissionKeys } from "../constants/default-roles.js";
 import { roleRepository } from "../repositories/role.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
 import { roleHistoryRepository } from "../repositories/role-history.repository.js";
 import { roleTemplateRepository } from "../repositories/role-template.repository.js";
 import { auditService } from "./audit.service.js";
 import { AppError } from "../utils/app-error.js";
 import { slugify } from "../utils/slugify.js";
 import type { CreateRoleInput, ListRolesQuery, UpdateRoleInput } from "../validation/role.validation.js";
+
+type RoleLike = { slug: string; isSystem: boolean };
+
+/** Built-in roles carry their locked default permissions so the UI can show them as non-removable. */
+function withDefaults<T extends RoleLike>(role: T) {
+  return { ...role, defaultPermissionKeys: role.isSystem ? getDefaultPermissionKeys(role.slug) : [] };
+}
 
 export class RoleService {
   async create(input: CreateRoleInput, userId?: string) {
@@ -55,7 +64,8 @@ export class RoleService {
   }
 
   async list(query: ListRolesQuery) {
-    return roleRepository.list(query);
+    const result = await roleRepository.list(query);
+    return { ...result, items: result.items.map(withDefaults) };
   }
 
   async listAll() {
@@ -67,7 +77,7 @@ export class RoleService {
     if (!role) {
       throw new AppError("Role not found", 404);
     }
-    return role;
+    return withDefaults(role);
   }
 
   async update(id: string, input: UpdateRoleInput, userId?: string) {
@@ -84,6 +94,27 @@ export class RoleService {
       throw new AppError("System role names cannot be changed", 403);
     }
 
+    if (!existing.isSystem && input.name && input.name !== existing.name) {
+      if ((await userRepository.countByRoleName(existing.name)) > 0) {
+        throw new AppError("This role is assigned to users, so it cannot be renamed. Move them to another role first.", 409);
+      }
+      const nextSlug = slugify(input.name);
+      if (nextSlug !== existing.slug && (await roleRepository.existsBySlug(nextSlug))) {
+        throw new AppError("A role with this name already exists", 409);
+      }
+    }
+
+    if (existing.isSystem && input.isActive === false) {
+      throw new AppError("System roles cannot be deactivated", 403);
+    }
+
+    if (existing.isSystem && input.permissionKeys) {
+      const missing = getDefaultPermissionKeys(existing.slug).filter((key) => !input.permissionKeys?.includes(key as never));
+      if (missing.length > 0) {
+        throw new AppError(`Default permissions of the ${existing.name} role cannot be removed: ${missing.join(", ")}`, 400);
+      }
+    }
+
     const permissionKeysChanged =
       input.permissionKeys && JSON.stringify(input.permissionKeys) !== JSON.stringify(existing.permissionKeys);
 
@@ -97,7 +128,8 @@ export class RoleService {
       });
     }
 
-    const role = await roleRepository.update(id, { ...input, updatedBy: userId });
+    const slugUpdate = !existing.isSystem && input.name && input.name !== existing.name ? { slug: slugify(input.name) } : {};
+    const role = await roleRepository.update(id, { ...input, ...slugUpdate, updatedBy: userId });
     if (!role) {
       throw new AppError("Role not found", 404);
     }
@@ -111,7 +143,7 @@ export class RoleService {
       after: { permissionKeys: role.permissionKeys },
     });
 
-    return role;
+    return withDefaults(role);
   }
 
   async delete(id: string, userId?: string) {
@@ -122,6 +154,11 @@ export class RoleService {
 
     if (existing.isSystem) {
       throw new AppError("System roles cannot be deleted", 403);
+    }
+
+    const holders = await userRepository.countByRoleName(existing.name);
+    if (holders > 0) {
+      throw new AppError(`${holders} user(s) still have this role. Move them to another role before deleting it.`, 409);
     }
 
     await roleRepository.delete(id);

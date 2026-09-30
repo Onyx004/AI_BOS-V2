@@ -8,6 +8,7 @@ import {
 import {
   applyRuntimeMigrations,
 } from "./database/runtime-migrations.js";
+import { startAttendancePresenceScheduler } from "./jobs/attendance-presence-scheduler.js";
 import { startBackupScheduler } from "./jobs/backup-scheduler.js";
 import { backupService } from "./services/backup.service.js";
 import { startIntegrationSyncScheduler } from "./jobs/integration-sync-scheduler.js";
@@ -35,6 +36,7 @@ async function bootstrap() {
   startBackupScheduler();
   startWorkflowStepScheduler();
   startManagedDeviceStatusScheduler();
+  startAttendancePresenceScheduler();
 
   server.listen(env.PORT, () => {
     logger.info(

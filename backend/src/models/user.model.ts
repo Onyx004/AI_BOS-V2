@@ -38,6 +38,9 @@ export type User = {
   companyName: string;
   email: string;
   passwordHash: string;
+  pinHash?: string;
+  pinSetAt?: Date;
+  lastSeenAt?: Date;
   role: string;
   isEmailVerified: boolean;
   isActive: boolean;
@@ -125,6 +128,17 @@ const userSchema = new Schema<User>(
       type: String,
       required: true,
       select: false,
+    },
+    pinHash: {
+      type: String,
+      select: false,
+    },
+    pinSetAt: {
+      type: Date,
+    },
+    lastSeenAt: {
+      type: Date,
+      index: true,
     },
     role: {
       type: String,

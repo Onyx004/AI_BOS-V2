@@ -64,6 +64,12 @@ export class TeamRepository {
     return TeamModel.findByIdAndDelete(id).select("_id").lean();
   }
 
+  async deleteByDepartment(departmentId: string) {
+    const teams = await TeamModel.find({ departmentId }).select("_id name").lean();
+    if (teams.length > 0) await TeamModel.deleteMany({ departmentId });
+    return teams;
+  }
+
   async existsForDepartment(departmentId: string) {
     return TeamModel.exists({ departmentId });
   }

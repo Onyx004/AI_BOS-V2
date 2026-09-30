@@ -2,7 +2,6 @@ import { motion } from "framer-motion";
 import {
  Building2,
  FileClock,
- Plus,
  Search,
  Settings,
  ShieldCheck,
@@ -20,7 +19,6 @@ import { cn } from "@shared/lib/utils";
 import { deleteEmployee, employeeDirectoryChangedEvent, fetchEmployeeUsers, type BackendEmployee } from "@shared/employees/employees.api";
 import { adminModules, adminSystemCards } from "./admin.data";
 import type { AdminModule, AdminRecord } from "./admin.types";
-import { createEmptyRecord } from "./admin.utils";
 import { AdminEntityTable } from "./components/AdminEntityTable";
 import { AdminRecordModal } from "./components/AdminRecordModal";
 
@@ -51,18 +49,6 @@ function toAdminEmployeeRecord(user: BackendEmployee): AdminRecord {
  };
 }
 
-function NotConnectedPanel({ module }: { module: AdminModule }) {
- return (
- <div className="rounded-lg border bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
- <p className="font-semibold text-foreground">{module.label} is not yet connected to a backend.</p>
- <p className="mt-1">
- No API exists for this module yet, so no records — real or placeholder — are shown here. This
- view will populate once a backend endpoint is implemented.
- </p>
- </div>
- );
-}
-
 export function AdminPage() {
  const { confirm } = useConfirm();
  const { toast } = useToast();
@@ -73,7 +59,6 @@ export function AdminPage() {
  const [editingRecord, setEditingRecord] = useState<AdminRecord | null>(null);
  const employeeLoadSequenceRef = useRef(0);
  const activeModule = modules.find((module) => module.id === activeModuleId) ?? modules[0];
- const activeModuleIsApiBacked = activeModule.id === "employees";
 
  const loadEmployeeRecords = useCallback(async () => {
  const requestId = employeeLoadSequenceRef.current + 1;
@@ -244,6 +229,21 @@ export function AdminPage() {
  <aside className="space-y-3">
  {modules.map((module) => {
  const Icon = module.icon;
+ if (module.route) {
+ return (
+ <Link
+ className="flex w-full items-start gap-3 rounded-lg border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40"
+ key={module.id}
+ to={module.route}
+ >
+ <Icon className="mt-1 h-5 w-5 shrink-0 text-primary" />
+ <span>
+ <span className="block font-semibold">{module.label}</span>
+ <span className="mt-1 block text-xs leading-5 text-muted-foreground">Open workspace &rarr;</span>
+ </span>
+ </Link>
+ );
+ }
  return (
  <button
  className={cn(
@@ -257,11 +257,7 @@ export function AdminPage() {
  <Icon className="mt-1 h-5 w-5 shrink-0 text-primary" />
  <span>
  <span className="block font-semibold">{module.label}</span>
- <span className="mt-1 block text-xs leading-5 text-muted-foreground">
- {module.id === "employees"
- ? `${module.records.length} records - live`
- : "Not connected"}
- </span>
+ <span className="mt-1 block text-xs leading-5 text-muted-foreground">{module.records.length} records - live</span>
  </span>
  </button>
  );
@@ -277,26 +273,14 @@ export function AdminPage() {
  <h2 className="mt-1 text-2xl font-bold">Dynamic Module Manager</h2>
  <p className="mt-2 text-sm text-muted-foreground">{activeModule.description}</p>
  </div>
- {activeModule.id !== "employees" && activeModuleIsApiBacked && (
- <Button onClick={() => setEditingRecord(createEmptyRecord(activeModule))} type="button">
- <Plus className="h-4 w-4" />
- Create Record
- </Button>
- )}
  </div>
- {activeModuleIsApiBacked && (
  <div className="relative">
  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
  <Input className="pl-9" placeholder={`Search ${activeModule.label.toLowerCase()}...`} value={search} onChange={(event) => setSearch(event.target.value)} />
  </div>
- )}
  </CardContent>
  </Card>
- {activeModuleIsApiBacked ? (
  <AdminEntityTable actionsDisabled={false} module={activeModule} onDelete={deleteRecord} onEdit={setEditingRecord} records={filteredRecords} />
- ) : (
- <NotConnectedPanel module={activeModule} />
- )}
  </section>
  </div>
  )}

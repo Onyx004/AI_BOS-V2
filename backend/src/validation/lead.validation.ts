@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { leadStatuses } from "../models/lead.model.js";
+import { currencyCodeSchema } from "./crm.validation.js";
 
 export const createLeadSchema = z.object({
   name: z.string().min(1).max(160),
@@ -9,6 +10,7 @@ export const createLeadSchema = z.object({
   source: z.string().max(80).default("Manual"),
   status: z.enum(leadStatuses).default("New"),
   value: z.number().min(0).default(0),
+  currency: currencyCodeSchema.optional(),
   ownerId: z.string().min(1).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
@@ -21,6 +23,7 @@ export const updateLeadSchema = z.object({
   source: z.string().max(80).optional(),
   status: z.enum(leadStatuses).optional(),
   value: z.number().min(0).optional(),
+  currency: currencyCodeSchema.optional(),
   ownerId: z.string().min(1).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });

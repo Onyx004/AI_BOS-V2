@@ -2,7 +2,7 @@ import type { FilterQuery, Types, UpdateQuery } from "mongoose";
 import { LeadModel, type Lead, type LeadDocument, type LeadStatus } from "../models/lead.model.js";
 
 export type LeadCreateData = Pick<Lead, "name" | "source" | "status" | "value" | "metadata"> &
-  Partial<Pick<Lead, "organizationId" | "company" | "email" | "phone" | "ownerId" | "createdBy">>;
+  Partial<Pick<Lead, "organizationId" | "currency" | "company" | "email" | "phone" | "ownerId" | "createdBy" | "activities">>;
 
 const ownerPopulate = { path: "ownerId", select: "fullName email role" };
 

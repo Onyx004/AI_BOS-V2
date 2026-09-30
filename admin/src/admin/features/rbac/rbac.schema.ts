@@ -14,6 +14,8 @@ export type Role = {
  hasFullAccess: boolean;
  rank: number;
  permissionKeys: string[];
+ /** Locked permissions of a built-in role; they can never be removed, only added to. */
+ defaultPermissionKeys?: string[];
  isActive: boolean;
 };
 

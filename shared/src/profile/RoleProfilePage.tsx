@@ -26,6 +26,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getStoredAuthSession, updateStoredSessionUser } from "@shared/auth/auth-service";
 import { ChangePasswordCard } from "@shared/auth/components/ChangePasswordCard";
+import { ChangePinCard } from "@shared/auth/components/ChangePinCard";
 import type { AuthRole } from "@shared/auth/types";
 import { getProfileRole, profileDirectory } from "@shared/profile/profile-directory";
 import { fetchOwnProfile, updateOwnProfile, type OwnProfileResult } from "@shared/profile/own-profile.api";
@@ -187,19 +188,6 @@ const profileConfigs: Record<AuthRole, RoleProfileConfig> = {
  stats: [{ label: "Integrations", value: "—", trend: "Loading…", icon: BriefcaseBusiness }],
  skills: ["Integrations", "AI Systems", "Automation", "Memory Architecture", "Platform Reliability"],
  permissions: ["Integration management", "AI configuration view", "Memory view"],
- activity: [],
- },
- Guest: {
- ...profileDirectory.Guest,
- company: "AI Business Operating System",
- department: "External",
- employeeId: "AIBOS-GST",
- email: "guest@aibos.company",
- phone: "+91 90000 10009",
- location: "India",
- stats: [{ label: "Access Level", value: "Restricted", trend: "Read-only", icon: ShieldCheck }],
- skills: ["Read-Only Access"],
- permissions: ["No mutating access"],
  activity: [],
  },
 };
@@ -729,6 +717,10 @@ export function RoleProfilePage() {
 
  <SectionCard subtitle="Update the password used to sign in." title="Change Password">
  <ChangePasswordCard />
+ </SectionCard>
+
+ <SectionCard subtitle="Sign in quickly with a 6-digit PIN instead of your password." title="Sign-in PIN">
+ <ChangePinCard />
  </SectionCard>
 
  <SectionCard title="Preferences">

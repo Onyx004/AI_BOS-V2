@@ -8,9 +8,11 @@ import { verifyPassword } from "../utils/password.js";
 import { fingerprintDevice } from "../utils/device.js";
 import { securityService, isValidObjectId } from "./security.service.js";
 import { passwordService } from "./password.service.js";
+import { attendanceService } from "./attendance.service.js";
 import { faceEnrollmentService } from "./face-enrollment.service.js";
 import { permissionService } from "./permission.service.js";
 import { env } from "../config/env.js";
+import { logger } from "../utils/logger.js";
 import type {
   ChangePasswordInput,
   LoginInput,
@@ -57,6 +59,16 @@ export class AuthService {
     });
   }
 
+  /** Login-based attendance: the first login of the day is the check-in. Never blocks the sign-in itself. */
+  private async recordLoginPresence(user: UserDocument, meta?: { ip?: string; userAgent?: string; deviceId?: string }) {
+    try {
+      await userRepository.touchLastSeen(user.id);
+      await attendanceService.recordLoginCheckIn(user.id, user.role, meta);
+    } catch (error) {
+      logger.error(error, "Login attendance check-in failed");
+    }
+  }
+
   async login(input: LoginInput, meta?: { ip?: string; userAgent?: string; deviceId?: string }) {
     const user = await userRepository.findByEmailWithPassword(input.email);
 
@@ -73,7 +85,13 @@ export class AuthService {
       throw new AppError(`Too many failed login attempts. Try again in ${env.LOCKOUT_DURATION_MINUTES} minutes.`, 423);
     }
 
-    const isPasswordValid = await verifyPassword(input.password, user.passwordHash);
+    const usingPin = Boolean(input.pin);
+    if (usingPin && user.mustChangePassword) {
+      throw new AppError("Sign in with your temporary password first to finish account setup", 401);
+    }
+    const isPasswordValid = usingPin
+      ? Boolean(user.pinHash) && (await verifyPassword(input.pin ?? "", user.pinHash ?? ""))
+      : await verifyPassword(input.password ?? "", user.passwordHash);
 
     if (!isPasswordValid) {
       await securityService.recordLoginHistory({
@@ -82,7 +100,7 @@ export class AuthService {
         ip: meta?.ip,
         userAgent: meta?.userAgent,
         deviceId: meta?.deviceId,
-        failureReason: "invalid_password",
+        failureReason: usingPin ? "invalid_pin" : "invalid_password",
       });
       await securityService.recordSecurityEvent({
         userId: user.id,
@@ -92,9 +110,9 @@ export class AuthService {
         userAgent: meta?.userAgent,
         deviceId: meta?.deviceId,
         description: "Failed login attempt",
-        metadata: { reason: "invalid_password" },
+        metadata: { reason: usingPin ? "invalid_pin" : "invalid_password" },
       });
-      throw new AppError("Invalid email or password", 401);
+      throw new AppError(usingPin ? "Invalid email or PIN" : "Invalid email or password", 401);
     }
 
     if (
@@ -134,6 +152,8 @@ export class AuthService {
     });
 
     await this.trackSession(authUser.id, tokens.refreshToken, meta);
+
+    if (!authUser.mustChangePassword) await this.recordLoginPresence(authUser, meta);
 
     await securityService.recordLoginHistory({
       userId: authUser.id,

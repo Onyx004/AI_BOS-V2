@@ -41,7 +41,6 @@ export const notificationOptions = [
  "Employee approvals",
  "CRM activity",
  "Finance alerts",
- "AI assistant summaries",
 ];
 
 export const securityOptions = [

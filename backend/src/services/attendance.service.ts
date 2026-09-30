@@ -5,20 +5,21 @@ import { attendanceRepository } from "../repositories/attendance.repository.js";
 import { faceEnrollmentRepository } from "../repositories/face-enrollment.repository.js";
 import { organizationRepository } from "../repositories/organization.repository.js";
 import { organizationSettingsRepository } from "../repositories/organization-settings.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
 import { AppError } from "../utils/app-error.js";
 import { hashValue } from "../utils/crypto.js";
 import type {
   AttendanceAdminOverviewQuery,
-  AttendanceHistoryQuery,
   AttendanceLocationInput,
   AttendanceMarkInput,
   AttendanceSummaryQuery,
-  ManualAttendanceMarkInput,
 } from "../validation/attendance.validation.js";
 import { faceEnrollmentService } from "./face-enrollment.service.js";
 import { securityService } from "./security.service.js";
 
 const indiaTimezone = "Asia/Kolkata";
+const offlineCheckOutAfterMs = 2 * 60 * 60 * 1000;
+const attendanceExemptRoles = new Set(["Owner", "Administrator"]);
 type RequestMeta = { ip?: string; userAgent?: string; deviceId?: string };
 
 function todayKey() {
@@ -101,21 +102,6 @@ function deviceHash(meta?: RequestMeta) {
 }
 
 export class AttendanceService {
-  async office() {
-    const { allowRemoteCheckIn: _allowRemoteCheckIn, enforceGeoFence: _enforceGeoFence, ...office } = await officeLocation();
-    return office;
-  }
-
-  async today(userId?: string) {
-    const currentUserId = requireUserId(userId);
-    const { allowRemoteCheckIn: _allowRemoteCheckIn, enforceGeoFence: _enforceGeoFence, ...office } = await officeLocation();
-    return { record: await attendanceRepository.findByUserAndDate(currentUserId, todayKey()), office };
-  }
-
-  async history(userId: string | undefined, query: AttendanceHistoryQuery) {
-    return attendanceRepository.findRecentByUser(requireUserId(userId), query.limit);
-  }
-
   async summary(query: AttendanceSummaryQuery) {
     return attendanceRepository.findByDate(query.date ?? todayKey());
   }
@@ -218,42 +204,64 @@ export class AttendanceService {
     return record;
   }
 
-  async manualCheckIn(userId: string | undefined, input: ManualAttendanceMarkInput, meta?: RequestMeta) {
-    const currentUserId = requireUserId(userId);
+  /** First login of the day is the check-in. A record auto-closed for being offline is reopened when the user comes back the same day. */
+  async recordLoginCheckIn(userId: string, role: string, meta?: RequestMeta) {
+    if (attendanceExemptRoles.has(role)) return null;
     const date = todayKey();
-    if (await attendanceRepository.findByUserAndDate(currentUserId, date)) throw new AppError("Attendance is already checked in for today.", 409);
+    const existing = await attendanceRepository.findByUserAndDate(userId, date);
+    if (existing) {
+      if (existing.checkOutMethod === "auto_offline") await attendanceRepository.reopenAutoClosed(userId, date);
+      return existing;
+    }
     const record = await attendanceRepository.create({
-      userId: new Types.ObjectId(currentUserId), date, status: "Present", checkInAt: new Date(),
-      checkInMethod: "manual", checkInManualReason: input.reason, checkInFaceVerified: false,
-      checkInLivenessPassed: false, checkInDeviceIdHash: deviceHash(meta), checkInLocation: await verifiedLocation(input),
+      userId: new Types.ObjectId(userId),
+      date,
+      status: "Present",
+      checkInAt: new Date(),
+      checkInMethod: "login",
+      checkInFaceVerified: false,
+      checkInLivenessPassed: false,
+      checkInDeviceIdHash: deviceHash(meta),
     });
-    await this.auditAttendance(currentUserId, "check-in", "manual", meta, input.reason);
+    await this.auditAttendance(userId, "check-in", "login", meta);
     return record;
   }
 
-  async manualCheckOut(userId: string | undefined, input: ManualAttendanceMarkInput, meta?: RequestMeta) {
-    const currentUserId = requireUserId(userId);
-    const date = todayKey();
-    const existing = await attendanceRepository.findByUserAndDate(currentUserId, date);
-    if (!existing) throw new AppError("Please check in before checking out.", 400);
-    if (existing.checkOutAt) throw new AppError("Attendance is already checked out for today.", 409);
-    const record = await attendanceRepository.updateByUserAndDate(currentUserId, date, {
-      status: "Checked Out", checkOutAt: new Date(), checkOutMethod: "manual",
-      checkOutManualReason: input.reason, checkOutFaceVerified: false, checkOutLivenessPassed: false,
-      checkOutDeviceIdHash: deviceHash(meta), checkOutLocation: await verifiedLocation(input),
-    });
-    await this.auditAttendance(currentUserId, "check-out", "manual", meta, input.reason);
-    return record;
+  async heartbeat(userId: string | undefined) {
+    await userRepository.touchLastSeen(requireUserId(userId));
+    return { ok: true };
   }
 
-  private async auditAttendance(userId: string, action: string, method: "face" | "manual", meta?: RequestMeta, reason?: string) {
+  /** Closes open records of users whose last heartbeat is older than the offline limit; the check-out time is when they went offline. */
+  async autoCheckOutOfflineUsers(now = new Date()) {
+    const open = await attendanceRepository.findOpen();
+    if (open.length === 0) return 0;
+    const users = await userRepository.findLastSeenByIds([...new Set(open.map((record) => record.userId.toString()))]);
+    const lastSeenByUser = new Map(users.map((user) => [user._id.toString(), user.lastSeenAt]));
+    let closed = 0;
+    for (const record of open) {
+      const lastSeen = lastSeenByUser.get(record.userId.toString());
+      const offlineSince = lastSeen && lastSeen > record.checkInAt ? lastSeen : record.checkInAt;
+      if (now.getTime() - offlineSince.getTime() < offlineCheckOutAfterMs) continue;
+      const result = await attendanceRepository.closeOpenRecord(record._id.toString(), offlineSince);
+      if (result.modifiedCount > 0) {
+        closed += 1;
+        await this.auditAttendance(record.userId.toString(), "check-out", "auto_offline");
+      }
+    }
+    return closed;
+  }
+
+  private async auditAttendance(userId: string, action: string, method: "face" | "manual" | "login" | "auto_offline", meta?: RequestMeta, reason?: string) {
+    const eventType = method === "face" ? "face_attendance_recorded" : method === "manual" ? "manual_attendance_recorded" : "daily_task_attendance_recorded";
+    const label = method === "face" ? "Face-verified" : method === "manual" ? "Manual" : method === "login" ? "Login-based" : "Offline auto";
     await securityService.recordSecurityEvent({
       userId,
-      eventType: method === "face" ? "face_attendance_recorded" : "manual_attendance_recorded",
+      eventType,
       severity: method === "face" ? "low" : "medium",
       ip: meta?.ip,
       userAgent: meta?.userAgent,
-      description: `${method === "face" ? "Face-verified" : "Manual"} attendance ${action} recorded`,
+      description: `${label} attendance ${action} recorded`,
       metadata: { action, verificationMethod: method, faceVerified: method === "face", reason, deviceIdentifierPresent: Boolean(meta?.deviceId) },
     });
   }

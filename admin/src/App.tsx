@@ -24,17 +24,19 @@ const SettingsPage = lazyNamed(() => import("@/admin/features/settings"), "Setti
 const IntegrationsCenterPage = lazyNamed(() => import("@/admin/features/integrations"), "IntegrationsCenterPage");
 const AuditBackupPage = lazyNamed(() => import("@/admin/features/audit-backup"), "AuditBackupPage");
 const SecurityDashboardPage = lazyNamed(() => import("@/admin/features/security"), "SecurityDashboardPage");
-const AIPage = lazyNamed(() => import("@/admin/features/ai"), "AIPage");
 const AttendancePage = lazyNamed(() => import("@/admin/features/attendance"), "AttendancePage");
 const MonitoringDashboardPage = lazyNamed(() => import("@/admin/features/monitoring"), "MonitoringDashboardPage");
 const DeviceDetailsPage = lazyNamed(() => import("@/admin/features/monitoring"), "DeviceDetailsPage");
 const SoftwareCatalogPage = lazyNamed(() => import("@/admin/features/monitoring"), "SoftwareCatalogPage");
-const AnalyticsPage = lazyNamed(() => import("@/common/features/analytics"), "AnalyticsPage");
 const ProjectsPage = lazyNamed(() => import("@shared/projects"), "ProjectsPage");
 const ProjectDetailsPage = lazyNamed(() => import("@shared/projects"), "ProjectDetailsPage");
 const WorkflowsPage = lazyNamed(() => import("@shared/workflows"), "WorkflowsPage");
 const TasksPage = lazyNamed(() => import("@shared/tasks"), "TasksPage");
 const MeetingsPage = lazyNamed(() => import("@shared/meetings"), "MeetingsPage");
+const CrmPage = lazyNamed(() => import("@shared/crm"), "CrmPage");
+const FinancePage = lazyNamed(() => import("@shared/finance"), "FinancePage");
+const ProductsPage = lazyNamed(() => import("@shared/products"), "ProductsPage");
+const DocumentsPage = lazyNamed(() => import("@shared/documents"), "DocumentsPage");
 const EmployeesPage = lazyNamed(() => import("@shared/employees"), "EmployeesPage");
 const ProfilePage = lazyNamed(() => import("@shared/profile/RoleProfilePage"), "RoleProfilePage");
 const CompleteProfilePage = lazyNamed(() => import("@shared/profile/CompleteProfilePage"), "CompleteProfilePage");
@@ -64,12 +66,15 @@ const routes: AppRouteConfig[] = [
   { path: "/account-security", element: <AccountSecurityPage />, allowedRoles: adminRoles },
   { path: "/settings/administrator-access", element: <AdministratorAccessPage />, allowedRoles: ["Owner"], allowFullAccessBypass: false },
   { path: "/integrations", element: <IntegrationsCenterPage />, allowedRoles: adminRoles },
-  { path: "/analytics", element: <AnalyticsPage />, allowedRoles: adminRoles },
   { path: "/projects", element: <ProjectsPage />, allowedRoles: adminRoles },
   { path: "/projects/:id", element: <ProjectDetailsPage />, allowedRoles: adminRoles },
   { path: "/workflows", element: <WorkflowsPage />, allowedRoles: adminRoles },
   { path: "/tasks", element: <TasksPage />, allowedRoles: adminRoles },
   { path: "/meetings", element: <MeetingsPage />, allowedRoles: adminRoles },
+  { path: "/crm", element: <CrmPage />, allowedRoles: adminRoles },
+  { path: "/finance", element: <FinancePage />, allowedRoles: adminRoles },
+  { path: "/products", element: <ProductsPage />, allowedRoles: adminRoles },
+  { path: "/documents", element: <DocumentsPage />, allowedRoles: adminRoles },
   { path: "/employees", element: <EmployeesPage />, allowedRoles: adminRoles },
   { path: "/attendance", element: <AttendancePage />, allowedRoles: adminRoles },
   { path: "/messenger", element: <CollaborationHubPage />, allowedRoles: adminRoles },
@@ -77,7 +82,6 @@ const routes: AppRouteConfig[] = [
   { path: "/notifications", element: <NotificationCenterPage />, allowedRoles: adminRoles },
   { path: "/audit-backup", element: <AuditBackupPage />, allowedRoles: adminRoles },
   { path: "/security", element: <SecurityDashboardPage />, allowedRoles: adminRoles },
-  { path: "/ai-assistant", element: <AIPage />, allowedRoles: adminRoles },
   { path: "/monitoring", element: <MonitoringAccessGate><MonitoringDashboardPage /></MonitoringAccessGate>, allowedRoles: adminRoles },
   { path: "/monitoring/devices/:deviceId", element: <MonitoringAccessGate><DeviceDetailsPage /></MonitoringAccessGate>, allowedRoles: adminRoles },
   { path: "/monitoring/software-catalog", element: <MonitoringAccessGate><SoftwareCatalogPage /></MonitoringAccessGate>, allowedRoles: adminRoles },

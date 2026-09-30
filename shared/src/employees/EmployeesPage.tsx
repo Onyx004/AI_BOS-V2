@@ -12,6 +12,7 @@ import {
  FileText,
  GraduationCap,
  KeyRound,
+ Pencil,
  Phone,
  Plus,
  Search,
@@ -25,8 +26,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link } from "react-router-dom";
-import type { AuthRole } from "@shared/auth/types";
 import { Avatar } from "@shared/ui/avatar";
+import { usePermissions } from "@shared/auth/usePermissions";
 import { ThemeToggle } from "@shared/ui/ThemeToggle";
 import { liveSyncIntervalMs, sharedDataChangedEvent } from "@shared/realtime/data-sync";
 import { Button } from "@shared/ui/button";
@@ -49,6 +50,7 @@ import {
  fetchEmployees,
  fetchHolidays,
  resetEmployeePassword,
+ updateEmployeeDesignation,
  type DepartmentOption,
 } from "./employees.api";
 import { DepartmentGroupPanel } from "./DepartmentGroupPanel";
@@ -89,7 +91,7 @@ function EmployeeFormModal({
  onSubmit: (input: EmployeeFormInput) => void;
  submitting: boolean;
 }) {
- const [assignableRoles, setAssignableRoles] = useState<AuthRole[]>([]);
+ const [assignableRoles, setAssignableRoles] = useState<string[]>([]);
  const {
  formState: { errors },
  handleSubmit,
@@ -97,7 +99,7 @@ function EmployeeFormModal({
  setValue,
  } = useForm<EmployeeFormValues>({
  resolver: zodResolver(employeeFormSchema),
- defaultValues: { ...emptyEmployeeForm, department: departmentOptions[0]?.name ?? emptyEmployeeForm.department },
+ defaultValues: emptyEmployeeForm,
  });
 
  useEffect(() => {
@@ -168,10 +170,12 @@ function EmployeeFormModal({
  <div className="space-y-2">
  <Label>Department</Label>
  <select className="h-11 w-full rounded-md border bg-background px-3 text-sm" {...register("department")}>
+ <option value="">Unassigned</option>
  {departmentOptions.map((department) => (
  <option key={department.id}>{department.name}</option>
  ))}
  </select>
+ <p className="text-xs text-muted-foreground">New employees start as Unassigned until you place them in a department.</p>
  </div>
  </div>
  <p className="mt-4 text-xs text-muted-foreground">
@@ -191,13 +195,36 @@ function EmployeeFormModal({
 
 function EmployeeProfile({
  employee,
+ onChangeDesignation,
  onResetPassword,
  resettingPassword,
 }: {
  employee: Employee;
+ onChangeDesignation?: (employee: Employee, designation: string) => Promise<boolean>;
  onResetPassword?: (employee: Employee) => void;
  resettingPassword?: boolean;
 }) {
+ const [editingDesignation, setEditingDesignation] = useState(false);
+ const [designationDraft, setDesignationDraft] = useState(employee.designation);
+ const [savingDesignation, setSavingDesignation] = useState(false);
+
+ useEffect(() => {
+ setEditingDesignation(false);
+ setDesignationDraft(employee.designation);
+ }, [employee.id, employee.designation]);
+
+ const saveDesignation = async () => {
+ const next = designationDraft.trim();
+ if (!onChangeDesignation || !next || next === employee.designation) {
+ setEditingDesignation(false);
+ return;
+ }
+ setSavingDesignation(true);
+ const saved = await onChangeDesignation(employee, next);
+ setSavingDesignation(false);
+ if (saved) setEditingDesignation(false);
+ };
+
  return (
  <Card className="glass overflow-hidden">
  <div className="h-28 bg-gradient-to-r from-primary/30 via-emerald-400/20 to-accent/30" />
@@ -208,15 +235,55 @@ function EmployeeProfile({
  <div>
  <p className="text-xs font-semibold text-primary">{employee.employeeCode}</p>
  <h2 className="mt-1 text-2xl font-bold">{employee.name}</h2>
+ {editingDesignation ? (
+ <form
+ className="mt-2 flex flex-wrap items-center gap-2"
+ onSubmit={(event) => {
+ event.preventDefault();
+ void saveDesignation();
+ }}
+ >
+ <Input
+ aria-label="Designation"
+ autoFocus
+ className="h-9 w-56"
+ maxLength={120}
+ onChange={(event) => setDesignationDraft(event.target.value)}
+ value={designationDraft}
+ />
+ <Button disabled={savingDesignation || !designationDraft.trim()} size="sm" type="submit">
+ {savingDesignation ? "Saving..." : "Save"}
+ </Button>
+ <Button
+ disabled={savingDesignation}
+ onClick={() => {
+ setEditingDesignation(false);
+ setDesignationDraft(employee.designation);
+ }}
+ size="sm"
+ type="button"
+ variant="outline"
+ >
+ Cancel
+ </Button>
+ </form>
+ ) : (
  <p className="mt-1 text-sm text-muted-foreground">
  {employee.designation} - {employee.department}
  </p>
+ )}
  </div>
  </div>
  <div className="flex flex-wrap items-center gap-2">
  <span className="w-fit rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
  {employee.status}
  </span>
+ {onChangeDesignation && !editingDesignation && (
+ <Button onClick={() => setEditingDesignation(true)} size="sm" type="button" variant="outline">
+ <Pencil className="h-4 w-4" />
+ Change Designation
+ </Button>
+ )}
  {onResetPassword && (
  <Button
  disabled={resettingPassword}
@@ -396,6 +463,8 @@ export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments 
  const loadSequenceRef = useRef(0);
  const attendanceLoadSequenceRef = useRef(0);
  const { toast } = useToast();
+ const { hasPermission } = usePermissions();
+ const canEditDesignation = hasPermission("user.edit");
  const loadEmployees = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
  const requestId = loadSequenceRef.current + 1;
  loadSequenceRef.current = requestId;
@@ -415,7 +484,7 @@ export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments 
  const mergedDepartments = [
  ...apiDepartments,
  ...departmentsFromEmployees
- .filter((name) => !apiDepartments.some((department) => department.name === name))
+ .filter((name) => name !== "Unassigned" && !apiDepartments.some((department) => department.name === name))
  .map((name) => ({ id: name, name, memberCount: 0 })),
  ];
  setDepartmentOptions(mergedDepartments);
@@ -553,6 +622,18 @@ export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments 
  toast({ title: "Could not create login account", description: (error as Error).message, type: "error" });
  } finally {
  setIsCreatingAccount(false);
+ }
+ };
+
+ const handleChangeDesignation = async (employee: Employee, designation: string) => {
+ try {
+ const updated = await updateEmployeeDesignation(employee.id, designation);
+ setEmployees((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+ toast({ title: "Designation updated", description: `${employee.name} is now ${designation}.`, type: "success" });
+ return true;
+ } catch (error) {
+ toast({ title: "Could not change designation", description: (error as Error).message, type: "error" });
+ return false;
  }
  };
 
@@ -723,7 +804,7 @@ export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments 
  )}
 
  {activeModule === "departments" && (
- departmentOptions.length === 0 ? (
+ departmentOptions.length === 0 && !employees.some((employee) => !employee.departmentId) ? (
  <EmptyState
  action={canCreateDepartments ? { label: "New Department", onClick: () => setIsAddingDepartment(true) } : undefined}
  description="Create your first department and pick its head to get started."
@@ -732,6 +813,14 @@ export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments 
  />
  ) : (
  <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+ <DepartmentGroupPanel
+ department={{ id: "unassigned", name: "Unassigned", description: "Employees who are not placed in a department yet.", memberCount: 0 }}
+ isUnassigned
+ members={employees.filter((employee) => !employee.departmentId)}
+ nonMembers={employees.filter((employee) => Boolean(employee.departmentId))}
+ onChanged={() => void loadEmployees({ silent: true })}
+ otherDepartments={departmentOptions}
+ />
  {departmentOptions.map((department) => {
  const members = employees.filter((employee) => employee.departmentId === department.id);
  const nonMembers = employees.filter((employee) => employee.departmentId !== department.id);
@@ -803,6 +892,7 @@ export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments 
  {selectedEmployee ? (
  <EmployeeProfile
  employee={selectedEmployee}
+ onChangeDesignation={canEditDesignation ? handleChangeDesignation : undefined}
  onResetPassword={handleResetPassword}
  resettingPassword={resettingPasswordId === selectedEmployee.id}
  />

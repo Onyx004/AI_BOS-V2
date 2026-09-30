@@ -88,8 +88,13 @@ export function updateDepartment(id: string, input: DepartmentFormInput, token?:
  });
 }
 
-export function deleteDepartment(id: string, token?: string) {
- return request<{ deleted: boolean }>(`/organization/departments/${id}`, token, { method: "DELETE" });
+/** `deleteTeams` confirms that the department's teams are deleted together with it. */
+export function deleteDepartment(id: string, token?: string, options: { deleteTeams?: boolean } = {}) {
+ return request<{ deleted: boolean; unassignedEmployees?: number; deletedTeams?: number }>(
+ `/organization/departments/${id}${options.deleteTeams ? "?deleteTeams=true" : ""}`,
+ token,
+ { method: "DELETE" },
+ );
 }
 
 export function fetchBranches(token?: string) {

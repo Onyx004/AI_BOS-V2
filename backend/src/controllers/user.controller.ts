@@ -13,7 +13,7 @@ export class UserController {
   };
 
   assignableRoles: RequestHandler = async (req, res) => {
-    const roles = userService.getAssignableRoles(req.user!.role);
+    const roles = await userService.getAssignableRoles(req.user!.role);
 
     sendSuccess(res, 200, {
       message: "Assignable roles fetched successfully",

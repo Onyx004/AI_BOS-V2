@@ -100,6 +100,7 @@ export async function runAction(step: WorkflowStep, userId?: string, context: Re
           attachments: [],
           recurring: false,
           recurrence: "None",
+          isDailyTask: false,
         },
         userId,
       );

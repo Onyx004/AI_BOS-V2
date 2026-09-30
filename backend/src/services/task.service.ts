@@ -1,5 +1,6 @@
 import type { Types } from "mongoose";
 import { taskRepository } from "../repositories/task.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
 import type { Task } from "../models/task.model.js";
 import type { AuthenticatedUser } from "../types/auth.js";
 import { notificationService } from "./notification.service.js";
@@ -147,8 +148,36 @@ export class TaskService {
 
   async list(query: ListTasksQuery, actor: AuthenticatedUser) {
     const access = await this.accessFor(actor);
-    const result = await taskRepository.list(query, taskAccessService.toFilter(access));
+    const resolvedQuery = query.assigneeId === "me" ? { ...query, assigneeId: actor.id } : query;
+    const result = await taskRepository.list(resolvedQuery, taskAccessService.toFilter(access));
     return { ...result, items: result.items.map(withTaskProgress) };
+  }
+
+  async createDailyTask(title: string, actor: AuthenticatedUser) {
+    const taskCode = await createUniqueTaskCode();
+    return taskRepository.create({
+      title,
+      taskCode,
+      status: "Todo",
+      progress: 0,
+      priority: "Medium",
+      issueType: "Task",
+      labels: [],
+      isDailyTask: true,
+      dueDate: new Date(),
+      assigneeId: actor.id as unknown as Types.ObjectId,
+      reporterId: actor.id as unknown as Types.ObjectId,
+      estimatedHours: 0,
+      actualHours: 0,
+      checklist: [],
+      attachments: [],
+      timeEntries: [],
+      recurring: false,
+      recurrence: "None",
+      isArchived: false,
+      createdBy: actor.id as unknown as Types.ObjectId,
+      updatedBy: actor.id as unknown as Types.ObjectId,
+    });
   }
 
   async listByProject(projectId: string, actor: AuthenticatedUser) {
@@ -299,6 +328,32 @@ export class TaskService {
   async stats(actor: AuthenticatedUser) {
     const access = await this.accessFor(actor);
     return taskRepository.stats(taskAccessService.toFilter(access));
+  }
+
+  async teamSummary(actor: AuthenticatedUser) {
+    const access = await this.accessFor(actor);
+
+    const members = access.allTasks
+      ? await userRepository.findMany({ isActive: true, _id: { $ne: actor.id } })
+      : await userRepository.findMany({ _id: { $in: access.managedAssigneeIds.filter((id) => id !== actor.id) } });
+
+    const memberIds = members.map((member) => (member._id as Types.ObjectId).toString());
+    const summaries = await taskRepository.teamSummary(memberIds);
+    const summaryById = new Map(summaries.map((summary) => [summary._id.toString(), summary]));
+
+    return members.map((member) => {
+      const id = (member._id as Types.ObjectId).toString();
+      const summary = summaryById.get(id);
+      return {
+        id,
+        fullName: member.fullName,
+        email: member.email,
+        role: member.role,
+        totalTasks: summary?.total ?? 0,
+        completedTasks: summary?.completed ?? 0,
+        overdueTasks: summary?.overdue ?? 0,
+      };
+    });
   }
 
   async exportCsv(query: ListTasksQuery, actor: AuthenticatedUser) {

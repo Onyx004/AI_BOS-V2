@@ -57,7 +57,7 @@ test("custom role edit applies a template locally and saves only the adjusted ro
   assert.match(page, /onChange=\{\(event\) => applyTemplateToMatrix\(event\.target\.value\)\}/);
   assert.match(
     page,
-    /setMatrixPermissionKeys\(template\.permissionKeys\.filter\(\(key\) => catalogKeys\.has\(key\)\)\)/,
+    /setMatrixPermissionKeys\(\[\.\.\.new Set\(\[\.\.\.lockedKeys, \.\.\.template\.permissionKeys\.filter\(\(key\) => catalogKeys\.has\(key\)\)\]\)\]\)/,
   );
   assert.match(page, /onChange=\{\(\) => toggleMatrixPermission\(entry\.key\)\}/);
   assert.match(
@@ -70,7 +70,7 @@ test("custom role edit applies a template locally and saves only the adjusted ro
 test("full-access system role controls remain disabled", async () => {
   const { page } = await readRbacSources();
 
-  assert.match(page, /checked=\{selectedRole\.hasFullAccess \|\| matrixPermissionKeys\.includes\(entry\.key\)\}/);
-  assert.match(page, /disabled=\{selectedRole\.hasFullAccess\}/);
+  assert.match(page, /checked=\{selectedRole\.hasFullAccess \|\| lockedKeys\.has\(entry\.key\) \|\| matrixPermissionKeys\.includes\(entry\.key\)\}/);
+  assert.match(page, /disabled=\{selectedRole\.hasFullAccess \|\| lockedKeys\.has\(entry\.key\)\}/);
   assert.match(page, /\{!selectedRole\.hasFullAccess && \([\s\S]*?Save Permissions/);
 });

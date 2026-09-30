@@ -15,15 +15,16 @@ export function ChangePasswordRequiredPage() {
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <KeyRound className="h-5 w-5" />
           </span>
-          <h1 className="mt-4 text-2xl font-bold">Change temporary password</h1>
+          <h1 className="mt-4 text-2xl font-bold">Set up your account</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {session ? `${session.user.fullName}, ` : ""}
-            set a permanent password before continuing.
+            set a permanent password, a 6-digit PIN and your profile photo to continue.
           </p>
         </div>
 
         <Card className="p-6">
           <ChangePasswordCard
+            firstLogin
             onChanged={async () => {
               await refreshSession();
               navigate("/dashboard", { replace: true });

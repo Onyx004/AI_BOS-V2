@@ -4,6 +4,13 @@ import { configureBackendTestEnv } from "../helpers/backend-env.ts";
 
 configureBackendTestEnv();
 
+// Login records attendance presence; there is no live MongoDB in these tests, so stub the DB-backed side effects.
+const { userRepository: presenceUserRepository } = await import("../../backend/src/repositories/user.repository.ts");
+const { attendanceService: presenceAttendanceService } = await import("../../backend/src/services/attendance.service.ts");
+presenceUserRepository.touchLastSeen = async () => undefined;
+presenceAttendanceService.recordLoginCheckIn = async () => null;
+
+
 test("createUser enforces the role-assignment hierarchy", async () => {
   const { userService } = await import("../../backend/src/services/user.service.ts");
   const { userRepository } = await import("../../backend/src/repositories/user.repository.ts");

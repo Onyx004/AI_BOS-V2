@@ -9,6 +9,8 @@ export type WorkspaceSearchItem = {
  keywords: string[];
  icon: LucideIcon;
  roles?: readonly AuthRole[];
+ /** Also visible to any role granted one of these permissions. */
+ permissions?: readonly string[];
 };
 
 export type QuickCreateAction = {
@@ -16,4 +18,6 @@ export type QuickCreateAction = {
  href: string;
  icon: LucideIcon;
  roles?: readonly AuthRole[];
+ /** Also visible to any role granted one of these permissions. */
+ permissions?: readonly string[];
 };

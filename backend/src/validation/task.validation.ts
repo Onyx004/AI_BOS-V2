@@ -51,6 +51,7 @@ export const createTaskSchema = z.object({
   attachments: z.array(attachmentSchema).default([]),
   recurring: z.boolean().default(false),
   recurrence: z.string().max(40).default("None"),
+  isDailyTask: z.boolean().default(false),
 }).superRefine(requireBlockedReason);
 
 export const updateTaskSchema = z.object({
@@ -76,8 +77,13 @@ export const updateTaskSchema = z.object({
   attachments: z.array(attachmentSchema).optional(),
   recurring: z.boolean().optional(),
   recurrence: z.string().max(40).optional(),
+  isDailyTask: z.boolean().optional(),
   isArchived: z.boolean().optional(),
 }).superRefine(requireBlockedReason);
+
+export const createDailyTaskSchema = z.object({
+  title: z.string().min(2).max(200),
+});
 
 export const taskIdParamsSchema = z.object({
   id: z.string().min(1),
@@ -112,6 +118,9 @@ export const listTasksQuerySchema = z.object({
   epicId: z.string().optional(),
   sprintId: z.string().optional(),
   assigneeId: z.string().optional(),
+  isDailyTask: z.coerce.boolean().optional(),
+  dueDateFrom: z.coerce.date().optional(),
+  dueDateTo: z.coerce.date().optional(),
   sortBy: z.enum(["title", "status", "priority", "dueDate", "createdAt", "backlogRank"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
   archived: z.coerce.boolean().optional(),
@@ -136,6 +145,7 @@ export const bulkUpdateTasksSchema = z.object({
 });
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
+export type CreateDailyTaskInput = z.infer<typeof createDailyTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;
 export type BulkDeleteTasksInput = z.infer<typeof bulkDeleteTasksSchema>;

@@ -7,7 +7,10 @@ import {
 import {
   RuntimeMigrationModel,
 } from "../models/runtime-migration.model.js";
+import { salesDefaultCrmPermissionKeys } from "../constants/permissions.js";
+import { removeGuestRole, syncDefaultRoles } from "./default-role-sync.js";
 import { AttendanceModel } from "../models/attendance.model.js";
+import { RoleModel } from "../models/role.model.js";
 import { FaceEnrollmentModel } from "../models/face-enrollment.model.js";
 import {
   UserModel,
@@ -15,6 +18,8 @@ import {
 
 const administratorMonitoringAccessMigrationKey =
   "administrator-monitoring-access-v1";
+const crmPermissionsMigrationKey = "crm-permissions-v1";
+const removeGuestRoleMigrationKey = "remove-guest-role-v1";
 const biometricRetentionMigrationKey =
   "face-attendance-biometric-retention-v2";
 
@@ -98,7 +103,28 @@ async function applyBiometricRetentionMigration() {
   await RuntimeMigrationModel.create({ key: biometricRetentionMigrationKey, appliedAt: new Date() });
 }
 
+/** Existing databases already have a Sales role; give it the CRM read/write/update defaults without touching other permissions. */
+async function applyCrmPermissionsMigration() {
+  const applied = await RuntimeMigrationModel.findOne({ key: crmPermissionsMigrationKey }).lean();
+  if (applied) return;
+
+  await RoleModel.updateOne({ slug: "sales" }, { $addToSet: { permissionKeys: { $each: salesDefaultCrmPermissionKeys } } });
+  await RuntimeMigrationModel.create({ key: crmPermissionsMigrationKey, appliedAt: new Date() });
+}
+
+async function applyRemoveGuestRoleMigration() {
+  const applied = await RuntimeMigrationModel.findOne({ key: removeGuestRoleMigrationKey }).lean();
+  if (applied) return;
+
+  await removeGuestRole();
+  await RuntimeMigrationModel.create({ key: removeGuestRoleMigrationKey, appliedAt: new Date() });
+}
+
 export async function applyRuntimeMigrations(): Promise<void> {
   await applyAdministratorMonitoringAccessMigration();
   await applyBiometricRetentionMigration();
+  await applyCrmPermissionsMigration();
+  await applyRemoveGuestRoleMigration();
+  // Every start: built-in roles must exist and keep their locked default permissions.
+  await syncDefaultRoles();
 }

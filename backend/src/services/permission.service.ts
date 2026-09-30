@@ -1,4 +1,5 @@
 import { roleRepository } from "../repositories/role.repository.js";
+import { slugify } from "../utils/slugify.js";
 
 export type EffectivePermissions = {
   hasFullAccess: boolean;
@@ -11,7 +12,10 @@ const builtInFullAccessRoles = new Set(["owner", "administrator", "ceo", "admin"
 export class PermissionService {
   async resolveEffectivePermissions(roleSlug: string): Promise<EffectivePermissions> {
     const normalizedRole = roleSlug.toLowerCase();
-    const role = await roleRepository.findBySlug(normalizedRole);
+    // Built-in roles are looked up by their lower-cased name; custom roles by the slug made from their name.
+    let role = await roleRepository.findBySlug(normalizedRole);
+    const slug = slugify(roleSlug);
+    if (!role && slug && slug !== normalizedRole) role = await roleRepository.findBySlug(slug);
 
     if (!role || !role.isActive) {
       if (builtInFullAccessRoles.has(normalizedRole)) {

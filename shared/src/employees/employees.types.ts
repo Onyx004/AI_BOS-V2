@@ -1,4 +1,3 @@
-import type { AuthRole } from "@shared/auth/types";
 
 export type EmployeeStatus = "Active" | "On Leave" | "Inactive";
 export type AttendanceStatus = "Present" | "Absent" | "On Leave";
@@ -112,5 +111,5 @@ export type Holiday = {
 
 export type EmployeeFormInput = Pick<Employee, "name" | "email" | "phone" | "department"> & {
  password: string;
- role: AuthRole;
+ role: string;
 };

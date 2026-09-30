@@ -1,5 +1,4 @@
 import { getStoredAuthSession, isSessionExpired, refreshSession } from "@shared/auth/auth-service";
-import type { AuthRole } from "@shared/auth/types";
 import { getApiBaseUrl } from "@shared/lib/env";
 import { formatClockTime } from "@shared/lib/utils-helpers";
 import { notifyLocalDataChanged } from "@shared/realtime/data-sync";
@@ -14,7 +13,7 @@ export type BackendEmployee = {
  fullName: string;
  companyName: string;
  email: string;
- role: AuthRole;
+ role: string;
  isActive: boolean;
  lastLoginAt?: string;
  createdAt?: string;
@@ -285,11 +284,11 @@ export async function fetchDepartmentMembers(departmentId: string): Promise<Empl
 }
 
 export async function fetchAssignableRoles() {
- return fetchJson<AuthRole[]>("/users/assignable-roles");
+ return fetchJson<string[]>("/users/assignable-roles");
 }
 
 async function patchEmployee(id: string, path: string, body: Record<string, unknown>): Promise<Employee> {
- const response = await fetchWithSession(`${getApiBaseUrl()}/users/${id}/${path}`, {
+ const response = await fetchWithSession(`${getApiBaseUrl()}/users/${id}${path ? `/${path}` : ""}`, {
  method: "PATCH",
  headers: { "Content-Type": "application/json" },
  body: JSON.stringify(body),
@@ -305,7 +304,8 @@ async function patchEmployee(id: string, path: string, body: Record<string, unkn
  return employee;
 }
 
-export function updateEmployeeDepartment(employeeId: string, departmentId: string) {
+/** `null` moves the employee to Unassigned. */
+export function updateEmployeeDepartment(employeeId: string, departmentId: string | null) {
  return patchEmployee(employeeId, "department", { departmentId });
 }
 
@@ -313,8 +313,12 @@ export function updateEmployeeManager(employeeId: string, managerId: string) {
  return patchEmployee(employeeId, "manager", { managerId });
 }
 
-export function updateEmployeeRole(employeeId: string, role: AuthRole) {
+export function updateEmployeeRole(employeeId: string, role: string) {
  return patchEmployee(employeeId, "role", { role });
+}
+
+export function updateEmployeeDesignation(employeeId: string, designation: string) {
+ return patchEmployee(employeeId, "", { employeeProfile: { designation } });
 }
 
 export async function createEmployee(input: EmployeeFormInput, departmentId?: string): Promise<Employee> {

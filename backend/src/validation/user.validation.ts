@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { userRoles } from "../constants/roles.js";
 import { passwordPolicySchema } from "../utils/password.js";
 
 const employeeDocumentSchema = z.object({
@@ -51,7 +50,7 @@ export const createUserSchema = z.object({
   fullName: z.string().min(2).max(120),
   email: z.string().email(),
   password: passwordPolicySchema,
-  role: z.enum(userRoles),
+  role: z.string().trim().min(1).max(80),
   phone: z.string().min(1).max(32),
   departmentId: z.string().length(24).optional(),
   branchId: z.string().length(24).optional(),
@@ -68,8 +67,9 @@ export const updateEmployeeProfileSchema = z.object({
   employeeProfile: employeeProfileSchema.optional(),
 });
 
+/** `null` moves the employee to Unassigned (no department). */
 export const moveDepartmentSchema = z.object({
-  departmentId: z.string().length(24),
+  departmentId: z.string().length(24).nullable(),
 });
 
 export const changeManagerSchema = z.object({
@@ -77,7 +77,7 @@ export const changeManagerSchema = z.object({
 });
 
 export const changeRoleSchema = z.object({
-  role: z.enum(userRoles),
+  role: z.string().trim().min(1).max(80),
 });
 
 const avatarSchema = z

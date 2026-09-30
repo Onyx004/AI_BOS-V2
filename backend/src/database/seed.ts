@@ -1,6 +1,7 @@
 import mongoose, { type Types } from "mongoose";
 import { env } from "../config/env.js";
 import { connectDatabase, disconnectDatabase } from "./mongo.js";
+import { syncDefaultRoles } from "./default-role-sync.js";
 import { UserModel, type EmployeeProfile } from "../models/user.model.js";
 import { ProjectModel } from "../models/project.model.js";
 import { OrganizationModel } from "../models/organization.model.js";
@@ -21,6 +22,8 @@ import { BackupScheduleModel } from "../models/backup-schedule.model.js";
 import { CompanyPolicyModel } from "../models/company-policy.model.js";
 import { HolidayModel } from "../models/holiday.model.js";
 import { organizationScope } from "../constants/organization.js";
+import { defaultRoleDefinitions, hrPermissions, managerPermissions } from "../constants/default-roles.js";
+import { crmPermissionKeys } from "../constants/permissions.js";
 import { integrationFamilies } from "../constants/integration.js";
 import { backupTypes } from "../constants/backup.js";
 import { notificationService } from "../services/notification.service.js";
@@ -477,7 +480,7 @@ const seedUsers: SeedUser[] = [
     fullName: "Leena Thomas",
     companyName,
     email: `leena.thomas@${companyDomain}`,
-    role: "Guest",
+    role: "Support",
     department: "Executive",
     managerEmail: `aarav.mehta@${companyDomain}`,
     employeeProfile: {
@@ -698,130 +701,7 @@ async function seedOrganization() {
 }
 
 async function seedRBAC() {
-  const managerPermissions = [
-    "project.view_stats",
-    "project.export",
-    "project.create",
-    "project.update",
-    "project.bulk_update",
-    "project.bulk_delete",
-    "project.archive",
-    "project.duplicate",
-    "project.comment",
-    "task.view_stats",
-    "task.export",
-    "task.create",
-    "task.update",
-    "task.delete",
-    "task.bulk_update",
-    "task.bulk_delete",
-    "task.log_time",
-    "task.comment",
-    "lead.view_all",
-    "lead.view_stats",
-    "lead.create",
-    "lead.update",
-    "lead.delete",
-    "workflow.view_stats",
-    "workflow.create",
-    "workflow.update",
-    "workflow.duplicate",
-    "workflow.toggle_status",
-    "workflow.execute",
-    "workflow.approve_step",
-    "team.create",
-    "team.update",
-    "policy.view_all",
-    "analytics.view",
-    "collaboration.moderate",
-    "notification.broadcast",
-    "audit.view",
-    "user.create",
-    "user.view_all",
-    "user.edit",
-  ];
-  const hrPermissions = [
-    "project.view_stats",
-    "task.view_stats",
-    "workflow.view_stats",
-    "department.create",
-    "department.update",
-    "branch.create",
-    "branch.update",
-    "team.create",
-    "team.update",
-    "holiday.create",
-    "holiday.update",
-    "holiday.delete",
-    "policy.create",
-    "policy.update",
-    "policy.publish",
-    "policy.view_all",
-    "user.view_all",
-    "collaboration.moderate",
-    "notification.broadcast",
-    "audit.view",
-    "user.create",
-    "user.edit",
-  ];
-  const employeePermissions: string[] = ["task.create", "task.update", "task.log_time", "task.comment"];
-  const roleDefinitions = [
-    { slug: "owner", name: "Owner", isSystem: true, hasFullAccess: true, rank: 100, permissionKeys: [] as string[] },
-    {
-      slug: "administrator",
-      name: "Administrator",
-      isSystem: true,
-      hasFullAccess: true,
-      rank: 90,
-      permissionKeys: [] as string[],
-    },
-    { slug: "manager", name: "Manager", isSystem: true, hasFullAccess: false, rank: 70, permissionKeys: managerPermissions },
-    { slug: "hr", name: "HR", isSystem: true, hasFullAccess: false, rank: 60, permissionKeys: hrPermissions },
-    {
-      slug: "finance",
-      name: "Finance",
-      isSystem: true,
-      hasFullAccess: false,
-      rank: 55,
-      permissionKeys: [
-        "project.view_stats",
-        "task.view_stats",
-        "analytics.view",
-        "policy.view_all",
-        "finance.view",
-        "finance.create",
-        "finance.update",
-        "finance.delete",
-        "finance.export",
-      ],
-    },
-    {
-      slug: "sales",
-      name: "Sales",
-      isSystem: true,
-      hasFullAccess: false,
-      rank: 50,
-      permissionKeys: ["lead.view_all", "lead.view_stats", "lead.create", "lead.update", "finance.view"],
-    },
-    {
-      slug: "support",
-      name: "Support",
-      isSystem: true,
-      hasFullAccess: false,
-      rank: 45,
-      permissionKeys: ["user.view_all"],
-    },
-    {
-      slug: "developer",
-      name: "Developer",
-      isSystem: true,
-      hasFullAccess: false,
-      rank: 45,
-      permissionKeys: ["integration.manage", "audit.view"],
-    },
-    { slug: "employee", name: "Employee", isSystem: true, hasFullAccess: false, rank: 20, permissionKeys: employeePermissions },
-    { slug: "guest", name: "Guest", isSystem: true, hasFullAccess: false, rank: 10, permissionKeys: [] as string[] },
-  ];
+  const roleDefinitions = defaultRoleDefinitions.map((definition) => ({ ...definition, isSystem: true }));
 
   const permissionGroups = [
     {
@@ -862,9 +742,9 @@ async function seedRBAC() {
       ],
     },
     {
-      name: "Lead Management",
-      description: "CRM lead pipeline, ownership, and stats.",
-      permissionKeys: ["lead.view_all", "lead.view_stats", "lead.create", "lead.update", "lead.delete"],
+      name: "CRM Management",
+      description: "CRM leads, customers, companies, contacts, deals, quotes, follow-ups and meetings.",
+      permissionKeys: crmPermissionKeys,
     },
     {
       name: "People Management",
@@ -936,18 +816,12 @@ async function seedRBAC() {
     {
       name: "Read-Only Auditor",
       description: "View-only access to roles, audit log, and role history.",
-      basedOnSystemRole: "guest",
+      basedOnSystemRole: "employee",
       permissionKeys: ["role.view", "permission_audit.view", "role_history.view"],
     },
   ];
 
-  for (const role of roleDefinitions) {
-    await RoleModel.updateOne(
-      { slug: role.slug },
-      { $setOnInsert: role },
-      { upsert: true },
-    );
-  }
+  await syncDefaultRoles();
 
   // Backfill collaboration.moderate onto Manager/HR even if their Role documents
   // were already seeded in an earlier session (setOnInsert above wouldn't touch them).

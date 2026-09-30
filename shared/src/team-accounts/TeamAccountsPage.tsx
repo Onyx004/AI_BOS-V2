@@ -3,7 +3,6 @@ import { Plus, ShieldOff, TriangleAlert, UsersRound, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { getStoredAuthSession } from "@shared/auth/auth-service";
-import type { AuthRole } from "@shared/auth/types";
 import { cn } from "@shared/lib/utils";
 import { liveSyncIntervalMs, sharedDataChangedEvent } from "@shared/realtime/data-sync";
 import { Button } from "@shared/ui/button";
@@ -21,7 +20,7 @@ import { createProfileSchema, type CreateProfileFormValues, type TeamAccount } f
 export function TeamAccountsPage() {
  const { toast } = useToast();
  const session = getStoredAuthSession();
- const [rolesResult, setRolesResult] = useState<TeamAccountsResult<AuthRole[]> | null>(null);
+ const [rolesResult, setRolesResult] = useState<TeamAccountsResult<string[]> | null>(null);
  const [accountsResult, setAccountsResult] = useState<TeamAccountsResult<TeamAccount[]> | null>(null);
  const [loading, setLoading] = useState(true);
  const [modalOpen, setModalOpen] = useState(false);
@@ -117,7 +116,7 @@ export function TeamAccountsPage() {
  <p className="text-sm font-semibold text-primary">Team Accounts</p>
  <h1 className="text-2xl font-bold">Create and manage user profiles</h1>
  <p className="text-sm text-muted-foreground">
- Your role ({session.user.role}) determines which roles you can create profiles for.
+ Your role ({session.user.roleName ?? session.user.role}) determines which roles you can create profiles for.
  </p>
  </div>
  {canCreate && (

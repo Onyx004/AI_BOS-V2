@@ -52,11 +52,6 @@ export const profileDirectory: Record<AuthRole, ProfileIdentity> = {
  initials: "AR",
  title: "Employee Workspace User",
  },
- Guest: {
- name: "Meera Pillai",
- initials: "MP",
- title: "Restricted Access User",
- },
 };
 
 export function getProfileRole(role?: AuthRole): AuthRole {

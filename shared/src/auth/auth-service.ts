@@ -1,5 +1,5 @@
 import { getApiBaseUrl } from "../lib/env";
-import { decodeJwtPayload, type AuthRole, type JwtReadySession } from "./types";
+import { authRoles, decodeJwtPayload, type AuthRole, type JwtReadySession } from "./types";
 
 export const authSessionChangedEvent = "ai_bos_auth_session_changed";
 
@@ -25,6 +25,29 @@ export function clearRememberedEmail() {
  window.localStorage.removeItem(rememberedEmailStorageKey);
 }
 
+const loginMethodStorageKey = "ai_bos_login_method";
+
+export type LoginMethod = "password" | "pin";
+
+/** Which sign-in option (password or PIN) worked last, so the login screen opens on it. Not a secret. */
+export function getRememberedLoginMethod(): LoginMethod {
+ if (typeof window === "undefined") return "password";
+ try {
+ return window.localStorage.getItem(loginMethodStorageKey) === "pin" ? "pin" : "password";
+ } catch {
+ return "password";
+ }
+}
+
+export function setRememberedLoginMethod(method: LoginMethod) {
+ if (typeof window === "undefined") return;
+ try {
+ window.localStorage.setItem(loginMethodStorageKey, method);
+ } catch {
+ // storage unavailable: the login screen just falls back to password next time
+ }
+}
+
 const roleSensitiveStorageKeys = [
  "ai-bos-recent-pages",
  "ai-bos-favorite-pages",
@@ -37,7 +60,7 @@ const roleSensitiveCacheNames = ["api-get-cache", "api-get-cache-v2"] as const;
 type LoginResponse = {
  user: {
  email: string;
- role: AuthRole | "Admin" | "CEO";
+ role: string;
  fullName: string;
  permissions?: string[];
  companyName?: string;
@@ -54,14 +77,20 @@ type LoginResponse = {
  };
 };
 
-function normalizeAuthRole(role: AuthRole | "Admin" | "CEO"): AuthRole {
+function normalizeAuthRole(role: string): AuthRole {
  if (role === "Admin") return "Administrator";
  if (role === "CEO") return "Owner";
- return role;
+ // Custom roles open the Employee workspace; what they can do comes from their permissions.
+ return (authRoles as readonly string[]).includes(role) ? (role as AuthRole) : "Employee";
+}
+
+/** The real name of a custom role, or undefined for the built-in roles. */
+function customRoleName(role: string): string | undefined {
+ return role === "Admin" || role === "CEO" || (authRoles as readonly string[]).includes(role) ? undefined : role;
 }
 
 function normalizeSession(session: JwtReadySession): JwtReadySession {
- const legacyRole = session.user.role as AuthRole | "Admin" | "CEO";
+ const legacyRole = session.user.role as string;
  return {
  ...session,
  user: {
@@ -138,11 +167,16 @@ export function updateStoredSessionUser(patch: Partial<JwtReadySession["user"]>)
 }
 
 /** Authenticates against the real backend — the account's role decides access, not the login form. */
-export async function login(email: string, password: string, rememberMe: boolean): Promise<JwtReadySession> {
+export async function login(
+ email: string,
+ secret: string,
+ rememberMe: boolean,
+ method: LoginMethod = "password",
+): Promise<JwtReadySession> {
  const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
  method: "POST",
  headers: { "Content-Type": "application/json" },
- body: JSON.stringify({ email, password }),
+ body: JSON.stringify(method === "pin" ? { email, pin: secret } : { email, password: secret }),
  });
 
  const json = await response.json().catch(() => null);
@@ -160,6 +194,7 @@ export async function login(email: string, password: string, rememberMe: boolean
     user: {
       email: data.user.email,
       role: normalizeAuthRole(data.user.role),
+      roleName: customRoleName(data.user.role),
       fullName: data.user.fullName,
       permissions: data.user.permissions ?? [],
       isProfileComplete: data.user.isProfileComplete ?? true,
@@ -173,7 +208,7 @@ export async function login(email: string, password: string, rememberMe: boolean
   return persistSession(session, rememberMe);
 }
 
-export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+export async function changePassword(currentPassword: string, newPassword: string, pin?: string): Promise<void> {
  const session = getStoredAuthSession();
  const response = await fetch(`${getApiBaseUrl()}/auth/change-password`, {
  method: "PATCH",
@@ -181,13 +216,31 @@ export async function changePassword(currentPassword: string, newPassword: strin
  "Content-Type": "application/json",
  ...(session ? { Authorization: `Bearer ${session.accessToken}` } : {}),
  },
- body: JSON.stringify({ currentPassword, newPassword }),
+ body: JSON.stringify({ currentPassword, newPassword, ...(pin ? { pin } : {}) }),
  });
 
  const json = await response.json().catch(() => null);
 
  if (!response.ok) {
  throw new Error(json?.message ?? "Unable to change password. Please try again.");
+ }
+}
+
+export async function changePin(currentPassword: string, pin: string): Promise<void> {
+ const session = getStoredAuthSession();
+ const response = await fetch(`${getApiBaseUrl()}/auth/pin`, {
+ method: "PUT",
+ headers: {
+ "Content-Type": "application/json",
+ ...(session ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+ },
+ body: JSON.stringify({ currentPassword, pin }),
+ });
+
+ const json = await response.json().catch(() => null);
+
+ if (!response.ok) {
+ throw new Error(json?.message ?? "Unable to save PIN. Please try again.");
  }
 }
 
@@ -281,6 +334,7 @@ async function performRefresh(): Promise<JwtReadySession | null> {
  user: {
  email: data.user.email,
  role: normalizeAuthRole(data.user.role),
+ roleName: customRoleName(data.user.role),
  fullName: data.user.fullName,
  permissions: data.user.permissions ?? current.user.permissions ?? [],
  isProfileComplete: data.user.isProfileComplete ?? true,

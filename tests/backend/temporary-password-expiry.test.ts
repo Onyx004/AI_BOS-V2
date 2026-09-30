@@ -5,6 +5,13 @@ import { configureBackendTestEnv } from "../helpers/backend-env.ts";
 
 configureBackendTestEnv();
 
+// Login records attendance presence; there is no live MongoDB in these tests, so stub the DB-backed side effects.
+const { userRepository: presenceUserRepository } = await import("../../backend/src/repositories/user.repository.ts");
+const { attendanceService: presenceAttendanceService } = await import("../../backend/src/services/attendance.service.ts");
+presenceUserRepository.touchLastSeen = async () => undefined;
+presenceAttendanceService.recordLoginCheckIn = async () => null;
+
+
 test("valid temporary password works before expiry and expired temporary password is rejected", async () => {
   const { authService } = await import("../../backend/src/services/auth.service.ts");
   const { userRepository } = await import("../../backend/src/repositories/user.repository.ts");

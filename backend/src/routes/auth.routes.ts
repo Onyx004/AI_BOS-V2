@@ -8,6 +8,7 @@ import { authRateLimiter } from "../middleware/rate-limit.middleware.js";
 import { validate } from "../middleware/validate.middleware.js";
 import {
   changePasswordSchema,
+  changePinSchema,
   loginSchema,
   refreshTokenSchema,
   resetPasswordRequestSchema,
@@ -39,6 +40,14 @@ authRoutes.patch(
   authenticate,
   validate({ body: changePasswordSchema }),
   asyncHandler(authController.changePassword),
+);
+
+authRoutes.put(
+  "/pin",
+  authenticate,
+  authRateLimiter,
+  validate({ body: changePinSchema }),
+  asyncHandler(authController.changePin),
 );
 
 authRoutes.post(

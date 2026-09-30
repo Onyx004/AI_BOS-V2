@@ -387,17 +387,34 @@ export function OrganizationPage() {
  };
 
  const removeDepartment = async (department: Department) => {
+  const members = department.memberCount ?? 0;
+ const departmentTeams = teams.filter((team) => team.departmentId === department._id);
+ const teamsWarning =
+ departmentTeams.length > 0
+ ? ` Its ${departmentTeams.length} team${departmentTeams.length === 1 ? "" : "s"} (${departmentTeams.map((team) => team.name).join(", ")}) will be deleted too, and team leads lose access to their members' tasks.`
+ : "";
  const accepted = await confirm({
- title: "Delete department?",
- description: `${department.name} will be removed if no teams or employees reference it.`,
- confirmLabel: "Delete",
+ title: departmentTeams.length > 0 ? "Delete department and its teams?" : "Delete department?",
+ description: `${department.name} will be deleted. ${members > 0 ? `${members} employee${members === 1 ? "" : "s"} in it will become Unassigned.` : "Employees in it (if any) will become Unassigned."}${teamsWarning}`,
+ confirmLabel: departmentTeams.length > 0 ? `Delete department and ${departmentTeams.length} team${departmentTeams.length === 1 ? "" : "s"}` : "Delete",
  tone: "danger",
  });
  if (!accepted) return;
  try {
- await deleteDepartment(department._id, token);
+ const result = await deleteDepartment(department._id, token, { deleteTeams: departmentTeams.length > 0 });
  setDepartments((current) => current.filter((item) => item._id !== department._id));
- toast({ title: "Department deleted", type: "success" });
+ setTeams((current) => current.filter((team) => team.departmentId !== department._id));
+ const unassigned = result.unassignedEmployees ?? 0;
+ const removedTeams = result.deletedTeams ?? 0;
+ const details = [
+ unassigned > 0 ? `${unassigned} employee${unassigned === 1 ? "" : "s"} moved to Unassigned.` : "",
+ removedTeams > 0 ? `${removedTeams} team${removedTeams === 1 ? "" : "s"} deleted.` : "",
+ ].filter(Boolean);
+ toast({
+ title: "Department deleted",
+ description: details.length > 0 ? details.join(" ") : undefined,
+ type: "success",
+ });
  } catch (error) {
  toast({ title: "Failed to delete department", description: (error as Error).message, type: "error" });
  }

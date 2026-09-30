@@ -1,7 +1,7 @@
 export type TaskStatus = "Todo" | "In Progress" | "Blocked" | "Review" | "Testing" | "Completed";
 export type TaskPriority = "Low" | "Medium" | "High" | "Critical";
 export type TaskIssueType = "Epic" | "Story" | "Task" | "Subtask" | "Bug";
-export type TaskView = "kanban" | "backlog" | "hierarchy" | "list" | "calendar" | "timeline";
+export type TaskView = "kanban" | "backlog" | "hierarchy" | "list" | "calendar" | "timeline" | "team";
 
 export type TaskAttachment = {
  name: string;

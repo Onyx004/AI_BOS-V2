@@ -1,26 +1,23 @@
 import { motion } from "framer-motion";
 import {
  AlarmClock,
+ ArrowLeft,
  Bell,
- CalendarDays,
  CheckCircle2,
  ClipboardCheck,
  Clock3,
  Edit3,
  Flag,
- GripVertical,
  GitBranch,
  Layers3,
  LayoutList,
  ListChecks,
- PanelRightOpen,
- PlayCircle,
  Plus,
- Repeat2,
  Rocket,
  Search,
  Timer,
  Trash2,
+ UsersRound,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -39,16 +36,19 @@ import { useToast } from "@shared/ui/toast-context";
 import { cn } from "@shared/lib/utils";
 import { formatDateTime } from "@shared/lib/utils-helpers";
 import { fetchEmployeeUsers } from "@shared/employees/employees.api";
-import { fetchProjects, updateProject, type ProjectSprint, type ProjectSummary } from "@shared/projects/projects.api";
+import { fetchProjects, type ProjectSummary } from "@shared/projects/projects.api";
 import { liveSyncIntervalMs, sharedDataChangedEvent } from "@shared/realtime/data-sync";
 import { fetchTaskComments, postTaskComment, type Comment } from "@shared/tasks/task-comments.api";
 import {
+ createDailyTask as apiCreateDailyTask,
  createTask as apiCreateTask,
  deleteTask as apiDeleteTask,
  fetchTasks as apiFetchTasks,
+ fetchTeamTaskSummary,
  logTaskTime as apiLogTaskTime,
  toggleChecklistItem as apiToggleChecklistItem,
  updateTask as apiUpdateTask,
+ type TeamTaskSummary,
 } from "@shared/tasks/tasks.api";
 import { taskIssueTypes, taskLabels, taskPriorities, taskStatuses } from "./tasks.data";
 import { taskFormSchema, type TaskFormValues } from "./tasks.schema";
@@ -83,20 +83,6 @@ function parseList(value: string) {
  .split(",")
  .map((item) => item.trim())
  .filter(Boolean);
-}
-
-function toDateInput(date: Date) {
- return date.toISOString().slice(0, 10);
-}
-
-function sprintStatusClass(status: ProjectSprint["status"]) {
- const classes: Record<ProjectSprint["status"], string> = {
- Planned: "bg-sky-500/10 text-sky-600 dark:text-sky-300",
- Active: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
- Closed: "bg-muted text-muted-foreground",
- };
-
- return classes[status];
 }
 
 function getProjectName(projects: ProjectSummary[], projectId?: string) {
@@ -180,6 +166,7 @@ function TaskCommentsPanel({ taskId }: { taskId: string }) {
 }
 
 function TaskFormModal({
+ defaultAssignee,
  initialTask,
  onClose,
  onSubmit,
@@ -187,6 +174,7 @@ function TaskFormModal({
  tasks,
  teamMembers,
 }: {
+ defaultAssignee?: string;
  initialTask?: Task | null;
  onClose: () => void;
  onSubmit: (input: TaskFormInput) => void;
@@ -223,7 +211,7 @@ function TaskFormModal({
  recurrence: initialTask.recurrence,
  notifications: initialTask.notifications,
  }
- : emptyForm;
+ : { ...emptyForm, assignee: defaultAssignee ?? emptyForm.assignee };
 
  const {
  control,
@@ -245,7 +233,7 @@ function TaskFormModal({
  <Dialog as="form" className="max-w-5xl" onClose={onClose} onSubmit={handleSubmit(onSubmit)}>
  <div className="mb-6 flex items-start justify-between gap-4">
  <div>
- <h2 className="text-2xl font-bold">{initialTask ? "Edit Task" : "Create Task"}</h2>
+ <h2 className="text-2xl font-bold">{initialTask ? "Edit Task" : "Assign Task"}</h2>
  <p className="mt-1 text-sm text-muted-foreground">{initialTask?.taskCode ?? "Task code is assigned when saved"}</p>
  </div>
  <Button onClick={onClose} type="button" variant="outline">
@@ -487,348 +475,12 @@ function TaskFormModal({
  <Button onClick={onClose} type="button" variant="outline">
  Cancel
  </Button>
- <Button type="submit">{initialTask ? "Save Task" : "Create Task"}</Button>
+ <Button type="submit">{initialTask ? "Save Task" : "Assign Task"}</Button>
  </div>
  </Dialog>
  );
 }
 
-function TaskCard({
- projects,
- task,
- onDelete,
- onEdit,
- onLogTime,
- onOpen,
- onToggleChecklist,
- onDragStart,
-}: {
- projects: ProjectSummary[];
- task: Task;
- onDelete?: () => void;
- onEdit?: () => void;
- onLogTime?: () => void;
- onOpen: () => void;
- onToggleChecklist?: (itemId: string) => void;
- onDragStart?: () => void;
-}) {
- const completion = getTaskCompletion(task);
- const timePercent = task.estimatedHours > 0 ? Math.min(100, Math.round((task.actualHours / task.estimatedHours) * 100)) : 0;
-
- return (
- <motion.article
- animate={{ opacity: 1, y: 0 }}
- className="rounded-lg border bg-background p-4 shadow-sm transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-glass"
- draggable={Boolean(onDragStart)}
- initial={{ opacity: 0, y: 14 }}
- onDragStart={onDragStart}
- >
- <div className="flex items-start justify-between gap-3">
- <div className="min-w-0">
- <p className="text-xs font-semibold text-primary">{task.taskCode}</p>
- <h3 className="mt-1 line-clamp-2 font-semibold leading-6">{task.title}</h3>
- </div>
- <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
- </div>
- <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
- <div className="flex min-w-0 items-center gap-2">
- <Layers3 className="h-3.5 w-3.5 shrink-0" />
- <span className="truncate">{getProjectName(projects, task.projectId)}</span>
- </div>
- <div className="flex min-w-0 items-center gap-2">
- <Rocket className="h-3.5 w-3.5 shrink-0" />
- <span className="truncate">{getSprintName(projects, task.sprintId)}</span>
- </div>
- </div>
- <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground">{task.description}</p>
- <div className="mt-4 flex flex-wrap gap-2">
- {task.issueType && task.issueType !== "Task" && (
- <span className="rounded-full bg-violet-500/10 px-2.5 py-1 text-xs font-semibold text-violet-600 dark:text-violet-300">
- {task.issueType}
- </span>
- )}
- <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", statusClass(task.status))}>{task.status}</span>
- <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", priorityClass(task.priority))}>{task.priority}</span>
- {task.recurring && (
- <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
- <Repeat2 className="h-3 w-3" />
- {task.recurrence}
- </span>
- )}
- </div>
- <div className="mt-4 flex flex-wrap gap-2">
- {task.labels.map((label) => (
- <span className="rounded-full border bg-card px-2 py-1 text-xs text-muted-foreground" key={label}>
- {label}
- </span>
- ))}
- </div>
- <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
- <div>
- <p className="text-xs text-muted-foreground">Assignee</p>
- <p className="mt-1 truncate font-semibold">{task.assignee}</p>
- </div>
- <div>
- <p className="text-xs text-muted-foreground">Due Date</p>
- <p className="mt-1 font-semibold">{task.dueDate}</p>
- </div>
- </div>
- <div className="mt-4 space-y-3">
- <div>
- <div className="mb-2 flex justify-between text-xs">
- <span className="text-muted-foreground">Progress</span>
- <span className="font-semibold">{completion}% · {100 - completion}% remaining</span>
- </div>
- <div className="h-2 overflow-hidden rounded-full bg-muted">
- <div className="h-full rounded-full bg-primary" style={{ width: `${completion}%` }} />
- </div>
- </div>
- <div>
- <div className="mb-2 flex justify-between text-xs">
- <span className="text-muted-foreground">Time Tracking</span>
- <span className="font-semibold">
- {formatHours(task.actualHours)} / {formatHours(task.estimatedHours)}
- </span>
- </div>
- <div className="h-2 overflow-hidden rounded-full bg-muted">
- <div className="h-full rounded-full bg-emerald-500" style={{ width: `${timePercent}%` }} />
- </div>
- </div>
- </div>
- {task.checklist.length > 0 && (
- <div className="mt-4 space-y-2">
- {task.checklist.slice(0, 3).map((item) => (
- <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground" key={item.id}>
- <input
- checked={item.done}
- className="h-3.5 w-3.5 accent-primary"
- disabled={!onToggleChecklist}
- onChange={() => onToggleChecklist?.(item.id)}
- type="checkbox"
- />
- <span className={cn(item.done && "line-through")}>{item.title}</span>
- </label>
- ))}
- </div>
- )}
- <div className="mt-4 flex flex-wrap gap-2">
- {onEdit && <Button onClick={onEdit} size="sm" type="button" variant="outline">
- <Edit3 className="h-4 w-4" />
- Edit
- </Button>}
- <Button onClick={onOpen} size="sm" type="button" variant="outline">
- <PanelRightOpen className="h-4 w-4" />
- Open
- </Button>
- {onLogTime && <Button onClick={onLogTime} size="sm" type="button" variant="outline">
- <Timer className="h-4 w-4" />
- Log 1h
- </Button>}
- {onDelete && <Button onClick={onDelete} size="sm" type="button" variant="outline">
- <Trash2 className="h-4 w-4" />
- </Button>}
- </div>
- </motion.article>
- );
-}
-
-function BacklogView({
- activeProject,
- backlogTasks,
- canManage,
- onCloseSprint,
- onCreateSprint,
- onMoveToBacklog,
- onMoveToSprint,
- onOpenTask,
- onStartSprint,
- sprintTasks,
- sprints,
- selectedSprintId,
- setSelectedSprintId,
-}: {
- activeProject?: ProjectSummary;
- backlogTasks: Task[];
- canManage: boolean;
- onCloseSprint: (sprint: ProjectSprint) => void;
- onCreateSprint: () => void;
- onMoveToBacklog: (task: Task) => void;
- onMoveToSprint: (task: Task, sprintId: string) => void;
- onOpenTask: (task: Task) => void;
- onStartSprint: (sprint: ProjectSprint) => void;
- sprintTasks: Task[];
- sprints: ProjectSprint[];
- selectedSprintId: string;
- setSelectedSprintId: (value: string) => void;
-}) {
- return (
- <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
- <Card className="glass">
- <CardHeader className="p-4">
- <div className="flex flex-wrap items-center justify-between gap-3">
- <div>
- <CardTitle className="text-base">Backlog</CardTitle>
- <p className="mt-1 text-xs text-muted-foreground">{backlogTasks.length} unplanned issues</p>
- </div>
- {canManage && <Button disabled={!activeProject} onClick={onCreateSprint} size="sm" type="button">
- <Plus className="h-4 w-4" />
- Sprint
- </Button>}
- </div>
- </CardHeader>
- <CardContent className="space-y-2 p-4 pt-0">
- {backlogTasks.length === 0 ? (
- <p className="rounded-md border bg-background p-3 text-sm text-muted-foreground">Backlog clear hai.</p>
- ) : (
- backlogTasks.map((task, index) => (
- <div className="grid gap-3 rounded-md border bg-background p-3 lg:grid-cols-[42px_minmax(0,1fr)_180px]" key={task.id}>
- <div className="text-xs font-semibold text-muted-foreground">#{index + 1}</div>
- <button className="min-w-0 text-left" onClick={() => onOpenTask(task)} type="button">
- <p className="truncate text-sm font-semibold">{task.title}</p>
- <p className="mt-1 text-xs text-muted-foreground">
- {task.taskCode} - {task.issueType ?? "Task"} - {getEpicTitle([activeProject].filter(Boolean) as ProjectSummary[], task.epicId)}
- </p>
- </button>
- {canManage && <select
- className="h-9 rounded-md border bg-background px-2 text-xs"
- onChange={(event) => event.target.value && onMoveToSprint(task, event.target.value)}
- value=""
- >
- <option value="">Move to sprint</option>
- {sprints
- .filter((sprint) => sprint.status !== "Closed")
- .map((sprint) => (
- <option key={sprint.id} value={sprint.id}>
- {sprint.name}
- </option>
- ))}
- </select>
- }
- </div>
- ))
- )}
- </CardContent>
- </Card>
-
- <Card className="glass">
- <CardHeader className="p-4">
- <CardTitle className="text-base">Sprint Plan</CardTitle>
- </CardHeader>
- <CardContent className="space-y-4 p-4 pt-0">
- <select
- className="h-10 w-full rounded-md border bg-background px-3 text-sm"
- onChange={(event) => setSelectedSprintId(event.target.value)}
- value={selectedSprintId}
- >
- <option value="">Select sprint</option>
- {sprints.map((sprint) => (
- <option key={sprint.id} value={sprint.id}>
- {sprint.name} ({sprint.status})
- </option>
- ))}
- </select>
- {sprints
- .filter((sprint) => !selectedSprintId || sprint.id === selectedSprintId)
- .map((sprint) => (
- <div className="rounded-md border bg-background p-3" key={sprint.id}>
- <div className="flex items-start justify-between gap-3">
- <div className="min-w-0">
- <p className="truncate text-sm font-semibold">{sprint.name}</p>
- <p className="mt-1 text-xs text-muted-foreground">{sprint.startDate} to {sprint.endDate}</p>
- </div>
- <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", sprintStatusClass(sprint.status))}>{sprint.status}</span>
- </div>
- {sprint.goal && <p className="mt-2 text-xs text-muted-foreground">{sprint.goal}</p>}
- {canManage && <div className="mt-3 flex flex-wrap gap-2">
- <Button disabled={sprint.status !== "Planned"} onClick={() => onStartSprint(sprint)} size="sm" type="button" variant="outline">
- <PlayCircle className="h-4 w-4" />
- Start
- </Button>
- <Button disabled={sprint.status === "Closed"} onClick={() => onCloseSprint(sprint)} size="sm" type="button" variant="outline">
- Close
- </Button>
- </div>
- }
- </div>
- ))}
- <div className="space-y-2">
- <p className="text-xs font-semibold uppercase text-muted-foreground">Selected sprint issues</p>
- {sprintTasks.length === 0 ? (
- <p className="rounded-md border bg-background p-3 text-sm text-muted-foreground">No issues in selected sprint.</p>
- ) : (
- sprintTasks.map((task) => (
- <div className="rounded-md border bg-background p-3" key={task.id}>
- <button className="w-full text-left" onClick={() => onOpenTask(task)} type="button">
- <p className="text-sm font-semibold">{task.title}</p>
- <p className="mt-1 text-xs text-muted-foreground">{task.taskCode} - {task.status}</p>
- </button>
- {canManage && <Button className="mt-2" onClick={() => onMoveToBacklog(task)} size="sm" type="button" variant="outline">
- Move to backlog
- </Button>}
- </div>
- ))
- )}
- </div>
- </CardContent>
- </Card>
- </div>
- );
-}
-
-function HierarchyView({ projects, tasks, onOpenTask }: { projects: ProjectSummary[]; tasks: Task[]; onOpenTask: (task: Task) => void }) {
- const epics = tasks.filter((task) => (task.issueType ?? "Task") === "Epic");
- const standaloneEpics = projects.flatMap((project) =>
- project.epics.map((epic) => ({ ...epic, projectId: project.id, projectName: project.projectName })),
- );
-
- return (
- <div className="space-y-4">
- {[...standaloneEpics, ...epics.map((task) => ({ id: task.id, title: task.title, status: task.status, projectId: task.projectId, projectName: getProjectName(projects, task.projectId) }))].map((epic) => {
- const children = tasks.filter((task) => task.epicId === epic.id || task.parentTaskId === epic.id);
- return (
- <Card className="glass" key={`${epic.projectId}-${epic.id}`}>
- <CardHeader className="p-4">
- <div className="flex flex-wrap items-center justify-between gap-3">
- <div className="min-w-0">
- <CardTitle className="truncate text-base">{epic.title}</CardTitle>
- <p className="mt-1 text-xs text-muted-foreground">{epic.projectName} - {children.length} linked issues</p>
- </div>
- <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">{epic.status}</span>
- </div>
- </CardHeader>
- <CardContent className="space-y-2 p-4 pt-0">
- {children.length === 0 ? (
- <p className="rounded-md border bg-background p-3 text-sm text-muted-foreground">No linked tasks yet.</p>
- ) : (
- children.map((task) => (
- <div className="rounded-md border bg-background p-3" key={task.id}>
- <button className="w-full text-left" onClick={() => onOpenTask(task)} type="button">
- <div className="flex flex-wrap items-center gap-2">
- <span className="text-xs font-semibold text-primary">{task.taskCode}</span>
- <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", statusClass(task.status))}>{task.status}</span>
- <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">{task.issueType ?? "Task"}</span>
- </div>
- <p className="mt-2 text-sm font-semibold">{task.title}</p>
- </button>
- <div className="mt-2 space-y-2 border-l pl-3">
- {tasks
- .filter((child) => child.parentTaskId === task.id)
- .map((child) => (
- <button className="block w-full rounded-md bg-muted p-2 text-left text-xs" key={child.id} onClick={() => onOpenTask(child)} type="button">
- {child.taskCode} - {child.title}
- </button>
- ))}
- </div>
- </div>
- ))
- )}
- </CardContent>
- </Card>
- );
- })}
- </div>
- );
-}
 
 function TaskDetailDrawer({
  canLogTime,
@@ -837,8 +489,6 @@ function TaskDetailDrawer({
  onClose,
  onEdit,
  onLogTime,
- onMoveToBacklog,
- onMoveToSprint,
  onToggleChecklist,
  onWorkUpdate,
  projects,
@@ -850,14 +500,11 @@ function TaskDetailDrawer({
  onClose: () => void;
  onEdit: () => void;
  onLogTime: () => void;
- onMoveToBacklog: () => void;
- onMoveToSprint: (sprintId: string) => void;
  onToggleChecklist: (itemId: string) => void;
  onWorkUpdate: (input: Record<string, unknown>) => void;
  projects: ProjectSummary[];
  task: Task;
 }) {
- const project = projects.find((item) => item.id === task.projectId);
  const completion = getTaskCompletion(task);
  const [workStatus, setWorkStatus] = useState<TaskStatus>(task.status);
  const [workProgress, setWorkProgress] = useState(task.progress);
@@ -1012,16 +659,6 @@ function TaskDetailDrawer({
  <Timer className="h-4 w-4" />
  Log 1h
  </Button>}
- {canManageTask && (task.sprintId ? (
- <Button onClick={onMoveToBacklog} type="button" variant="outline">Move to backlog</Button>
- ) : (
- <select className="h-10 rounded-md border bg-background px-3 text-sm" onChange={(event) => event.target.value && onMoveToSprint(event.target.value)} value="">
- <option value="">Move to sprint</option>
- {(project?.sprints ?? []).filter((sprint) => sprint.status !== "Closed").map((sprint) => (
- <option key={sprint.id} value={sprint.id}>{sprint.name}</option>
- ))}
- </select>
- ))}
  </div>
  </div>
  </aside>
@@ -1029,64 +666,6 @@ function TaskDetailDrawer({
  );
 }
 
-function CalendarView({ tasks }: { tasks: Task[] }) {
- const sortedTasks = [...tasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-
- return (
- <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
- {sortedTasks.map((task) => (
- <Card className="glass" key={task.id}>
- <CardContent className="p-5">
- <div className="mb-4 flex items-center justify-between gap-3">
- <CalendarDays className="h-5 w-5 text-primary" />
- <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", priorityClass(task.priority))}>{task.priority}</span>
- </div>
- <p className="font-semibold leading-6">{task.title}</p>
- <p className="mt-2 text-sm text-muted-foreground">
- {task.startDate} to {task.dueDate}
- </p>
- <p className="mt-3 text-xs font-semibold text-primary">{task.assignee}</p>
- </CardContent>
- </Card>
- ))}
- </div>
- );
-}
-
-function TimelineView({ tasks }: { tasks: Task[] }) {
- return (
- <Card className="glass">
- <CardContent className="space-y-4 p-5">
- {[...tasks]
- .sort((a, b) => a.startDate.localeCompare(b.startDate))
- .map((task) => {
- const completion = getTaskCompletion(task);
- return (
- <div className="grid gap-3 rounded-lg border bg-background p-4 lg:grid-cols-[220px_1fr_140px]" key={task.id}>
- <div>
- <p className="text-sm font-semibold">{task.startDate}</p>
- <p className="mt-1 text-xs text-muted-foreground">Due {task.dueDate}</p>
- </div>
- <div className="min-w-0">
- <div className="flex flex-wrap items-center gap-2">
- <p className="font-semibold">{task.title}</p>
- <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", statusClass(task.status))}>{task.status}</span>
- </div>
- <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
- <div className="h-full rounded-full bg-primary" style={{ width: `${completion}%` }} />
- </div>
- </div>
- <div className="text-sm lg:text-right">
- <p className="font-semibold">{task.assignee}</p>
- <p className="mt-1 text-xs text-muted-foreground">{formatHours(task.actualHours)} tracked</p>
- </div>
- </div>
- );
- })}
- </CardContent>
- </Card>
- );
-}
 
 export function TasksPage() {
  const { confirm } = useConfirm();
@@ -1097,21 +676,30 @@ export function TasksPage() {
  const canDeleteTask = hasPermission("task.delete");
  const canLogTime = hasPermission("task.log_time");
  const canManageTask = hasAnyPermission("task.view_stats", "task.export", "task.delete", "task.bulk_update", "task.bulk_delete");
+ const canViewTeam = hasPermission("task.view_team");
  const [tasks, setTasks] = useState<Task[]>([]);
+ const [teamSummary, setTeamSummary] = useState<TeamTaskSummary[]>([]);
+ const [teamSummaryLoaded, setTeamSummaryLoaded] = useState(false);
+ const [teamSummaryLoading, setTeamSummaryLoading] = useState(false);
+ const [selectedTeamMember, setSelectedTeamMember] = useState<TeamTaskSummary | null>(null);
+ const [teamMemberTasks, setTeamMemberTasks] = useState<Task[]>([]);
+ const [teamMemberTasksLoading, setTeamMemberTasksLoading] = useState(false);
+ const [assignTaskForPerson, setAssignTaskForPerson] = useState<string | null>(null);
+ const [isAddingDailyTask, setIsAddingDailyTask] = useState(false);
+ const [dailyTaskTitle, setDailyTaskTitle] = useState("");
+ const [savingDailyTask, setSavingDailyTask] = useState(false);
  const [projects, setProjects] = useState<ProjectSummary[]>([]);
  const [teamMembers, setTeamMembers] = useState<string[]>([]);
  const [employeeIdByName, setEmployeeIdByName] = useState<Record<string, string>>({});
- const [view, setView] = useState<TaskView>("kanban");
+ const [view, setView] = useState<TaskView>("list");
  const [search, setSearch] = useState("");
  const [status, setStatus] = useState("All");
  const [priority, setPriority] = useState("All");
  const [issueType, setIssueType] = useState("All Types");
  const [projectId, setProjectId] = useState("All Projects");
- const [selectedSprintId, setSelectedSprintId] = useState("");
  const [editingTask, setEditingTask] = useState<Task | null>(null);
  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
  const [isCreating, setIsCreating] = useState(false);
- const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
 
  const loadTasks = useCallback(async () => {
  const result = await apiFetchTasks();
@@ -1121,6 +709,30 @@ export function TasksPage() {
  const loadProjects = useCallback(async () => {
  const result = await fetchProjects();
  if (result.status === "ok") setProjects(result.data);
+ }, []);
+
+ const loadTeamSummary = useCallback(async () => {
+ setTeamSummaryLoading(true);
+ try {
+ const result = await fetchTeamTaskSummary();
+ if (result.status === "ok") {
+ setTeamSummary(result.data);
+ setTeamSummaryLoaded(true);
+ }
+ } finally {
+ setTeamSummaryLoading(false);
+ }
+ }, []);
+
+ const openTeamMember = useCallback(async (member: TeamTaskSummary) => {
+ setSelectedTeamMember(member);
+ setTeamMemberTasksLoading(true);
+ try {
+ const result = await apiFetchTasks({ assigneeId: member.id });
+ if (result.status === "ok") setTeamMemberTasks(result.data as unknown as Task[]);
+ } finally {
+ setTeamMemberTasksLoading(false);
+ }
  }, []);
 
  useEffect(() => {
@@ -1164,16 +776,26 @@ export function TasksPage() {
  .filter((task) => projectId === "All Projects" || task.projectId === projectId);
  }, [issueType, priority, projectId, search, status, tasks]);
 
- const activeProject = projects.find((project) => project.id === projectId);
- const visibleSprints = activeProject?.sprints ?? [];
- const backlogTasks = filteredTasks
- .filter((task) => !task.sprintId && (task.issueType ?? "Task") !== "Epic")
- .sort((a, b) => (a.backlogRank ?? Number.MAX_SAFE_INTEGER) - (b.backlogRank ?? Number.MAX_SAFE_INTEGER));
- const sprintTasks = filteredTasks.filter((task) => (selectedSprintId ? task.sprintId === selectedSprintId : Boolean(task.sprintId)));
-
  const stats = getTaskStats(tasks);
  const latestActivities = tasks.flatMap((task) => task.activityLogs.map((log) => ({ ...log, task: task.title }))).slice(0, 6);
  const notifications = tasks.flatMap((task) => task.notifications.map((title) => ({ id: `${task.id}-${title}`, title, task: task.title }))).slice(0, 6);
+
+ const addDailyTask = async () => {
+ const title = dailyTaskTitle.trim();
+ if (title.length < 2) return;
+ setSavingDailyTask(true);
+ try {
+ const created = await apiCreateDailyTask(title);
+ setTasks((current) => [created as unknown as Task, ...current]);
+ setDailyTaskTitle("");
+ setIsAddingDailyTask(false);
+ toast({ title: "Daily task added", description: title, type: "success" });
+ } catch (error) {
+ toast({ title: "Could not add daily task", description: error instanceof Error ? error.message : "Try again.", type: "error" });
+ } finally {
+ setSavingDailyTask(false);
+ }
+ };
 
  const upsertTask = async (input: TaskFormInput) => {
  const payload = {
@@ -1208,9 +830,13 @@ export function TasksPage() {
  } else {
  const created = await apiCreateTask(payload);
  setTasks((current) => [created as unknown as Task, ...current]);
+ if (selectedTeamMember && payload.assigneeId === selectedTeamMember.id) {
+ setTeamMemberTasks((current) => [created as unknown as Task, ...current]);
+ }
  }
  setEditingTask(null);
  setIsCreating(false);
+ setAssignTaskForPerson(null);
  } catch (error) {
  toast({ title: "Could not save task", description: error instanceof Error ? error.message : "Try again.", type: "error" });
  }
@@ -1232,27 +858,6 @@ export function TasksPage() {
  toast({ title: "Could not delete task", description: error instanceof Error ? error.message : "Try again.", type: "error" });
  }
  }
- };
-
- const updateTaskStatus = (id: string, nextStatus: TaskStatus) => {
- const task = tasks.find((item) => item.id === id);
- if (nextStatus === "Blocked" && !task?.blockedReason) {
- if (task) setSelectedTask(task);
- toast({ title: "Blocked reason required", description: "Open the task and enter why work is blocked.", type: "warning" });
- return;
- }
- const previous = tasks;
- setTasks((current) => current.map((task) => (task.id === id ? { ...task, status: nextStatus } : task)));
-
- apiUpdateTask(id, { status: nextStatus, ...(nextStatus === "Blocked" ? { blockedReason: task?.blockedReason } : {}) })
- .then((updated) => {
- setTasks((current) => current.map((item) => (item.id === id ? (updated as unknown as Task) : item)));
- setSelectedTask((current) => (current?.id === id ? (updated as unknown as Task) : current));
- })
- .catch((error) => {
- setTasks(previous);
- toast({ title: "Could not move task", description: error instanceof Error ? error.message : "Try again.", type: "error" });
- });
  };
 
  const toggleChecklist = (taskId: string, itemId: string) => {
@@ -1294,54 +899,6 @@ export function TasksPage() {
  }
  };
 
- const moveToSprint = (task: Task, sprintId: string) => {
- void updateTaskFields(task, { sprintId, projectId: task.projectId || activeProject?.id, backlogRank: null });
- };
-
- const moveToBacklog = (task: Task) => {
- void updateTaskFields(task, { sprintId: null, backlogRank: Date.now() });
- };
-
- const createSprint = async () => {
- if (!activeProject) {
- toast({ title: "Select a project first", description: "Sprint project ke andar create hota hai.", type: "warning" });
- return;
- }
- const nextNumber = activeProject.sprints.length + 1;
- const startDate = toDateInput(new Date());
- const endDate = toDateInput(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
- try {
- const updated = await updateProject(activeProject.id, {
- sprints: [
- ...activeProject.sprints.map(({ id, ...sprint }) => ({ _id: id, ...sprint })),
- { name: `Sprint ${nextNumber}`, goal: "Planned delivery increment", status: "Planned", startDate, endDate },
- ],
- });
- setProjects((current) => current.map((project) => (project.id === updated.id ? updated : project)));
- setSelectedSprintId(updated.sprints.at(-1)?.id ?? "");
- toast({ title: "Sprint created", description: "Backlog issues can now be moved into this sprint.", type: "success" });
- } catch (error) {
- toast({ title: "Could not create sprint", description: error instanceof Error ? error.message : "Try again.", type: "error" });
- }
- };
-
- const updateSprintStatus = async (sprint: ProjectSprint, status: ProjectSprint["status"]) => {
- if (!activeProject) return;
- try {
- const updated = await updateProject(activeProject.id, {
- sprints: activeProject.sprints.map(({ id, ...item }) => ({
- _id: id,
- ...item,
- status: item.name === sprint.name && item.startDate === sprint.startDate ? status : item.status,
- })),
- });
- setProjects((current) => current.map((project) => (project.id === updated.id ? updated : project)));
- toast({ title: `Sprint ${status.toLowerCase()}`, description: `${sprint.name} updated.`, type: "success" });
- } catch (error) {
- toast({ title: "Could not update sprint", description: error instanceof Error ? error.message : "Try again.", type: "error" });
- }
- };
-
  const statCards = [
  { label: "Total Tasks", value: stats.total, icon: ListChecks },
  { label: "Active Tasks", value: stats.active, icon: ClipboardCheck },
@@ -1363,9 +920,13 @@ export function TasksPage() {
  <Link to="/dashboard">Dashboard</Link>
  </Button>
  <ThemeToggle />
+ <Button onClick={() => setIsAddingDailyTask(true)} type="button" variant={canCreateTask ? "outline" : "default"}>
+ <Plus className="h-4 w-4" />
+ Add Daily Task
+ </Button>
  {canCreateTask && <Button onClick={() => setIsCreating(true)} type="button">
  <Plus className="h-4 w-4" />
- Create Task
+ Assign Task
  </Button>}
  </div>
  </div>
@@ -1392,8 +953,8 @@ export function TasksPage() {
 
  <Card className="glass">
  <CardContent className="space-y-4 p-4">
- <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_180px_150px_150px_150px] xl:grid-cols-[minmax(260px,1fr)_190px_150px_150px_150px_auto]">
- <div className="relative">
+ <div className="flex flex-wrap items-center gap-3">
+ <div className="relative min-w-[220px] flex-1">
  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
  <Input
  className="pl-9"
@@ -1402,25 +963,44 @@ export function TasksPage() {
  onChange={(event) => setSearch(event.target.value)}
  />
  </div>
- <select className="h-11 rounded-md border bg-background px-3 text-sm" value={status} onChange={(event) => setStatus(event.target.value)}>
+ <div className="flex flex-wrap gap-2">
+ {(["list", ...(canViewTeam ? (["team"] as const) : [])] as TaskView[]).map((item) => (
+ <Button
+ key={item}
+ onClick={() => {
+ setView(item);
+ if (item === "team") {
+ setSelectedTeamMember(null);
+ if (!teamSummaryLoaded) void loadTeamSummary();
+ }
+ }}
+ type="button"
+ variant={view === item ? "default" : "outline"}
+ >
+ {item === "list" && <LayoutList className="h-4 w-4" />}
+ {item === "team" && <UsersRound className="h-4 w-4" />}
+ {item}
+ </Button>
+ ))}
+ </div>
+ </div>
+ <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+ <select className="h-11 w-full min-w-0 rounded-md border bg-background px-3 text-sm" value={status} onChange={(event) => setStatus(event.target.value)}>
  <option>All</option>
  {taskStatuses.map((item) => (
  <option key={item}>{item}</option>
  ))}
  </select>
- <select className="h-11 rounded-md border bg-background px-3 text-sm" value={priority} onChange={(event) => setPriority(event.target.value)}>
+ <select className="h-11 w-full min-w-0 rounded-md border bg-background px-3 text-sm" value={priority} onChange={(event) => setPriority(event.target.value)}>
  <option>All</option>
  {taskPriorities.map((item) => (
  <option key={item}>{item}</option>
  ))}
  </select>
  <select
- className="h-11 rounded-md border bg-background px-3 text-sm"
+ className="h-11 w-full min-w-0 rounded-md border bg-background px-3 text-sm"
  value={projectId}
- onChange={(event) => {
- setProjectId(event.target.value);
- setSelectedSprintId("");
- }}
+ onChange={(event) => setProjectId(event.target.value)}
  >
  <option>All Projects</option>
  {projects.map((project) => (
@@ -1429,25 +1009,12 @@ export function TasksPage() {
  </option>
  ))}
  </select>
- <select className="h-11 rounded-md border bg-background px-3 text-sm" value={issueType} onChange={(event) => setIssueType(event.target.value)}>
+ <select className="h-11 w-full min-w-0 rounded-md border bg-background px-3 text-sm" value={issueType} onChange={(event) => setIssueType(event.target.value)}>
  <option>All Types</option>
  {taskIssueTypes.map((item) => (
  <option key={item}>{item}</option>
  ))}
  </select>
- <div className="flex flex-wrap gap-2">
- {(["kanban", "backlog", "hierarchy", "list", "calendar", "timeline"] as TaskView[]).map((item) => (
- <Button key={item} onClick={() => setView(item)} type="button" variant={view === item ? "default" : "outline"}>
- {item === "kanban" && <ClipboardCheck className="h-4 w-4" />}
- {item === "backlog" && <Rocket className="h-4 w-4" />}
- {item === "hierarchy" && <GitBranch className="h-4 w-4" />}
- {item === "list" && <LayoutList className="h-4 w-4" />}
- {item === "calendar" && <CalendarDays className="h-4 w-4" />}
- {item === "timeline" && <Clock3 className="h-4 w-4" />}
- {item}
- </Button>
- ))}
- </div>
  </div>
  <div className="flex flex-wrap gap-2">
  {taskLabels.map((label) => (
@@ -1464,80 +1031,15 @@ export function TasksPage() {
  </CardContent>
  </Card>
 
- {view === "kanban" && (
+ {view === "list" && (
  filteredTasks.length === 0 ? (
  <EmptyState
- action={canCreateTask ? { label: "Create Task", onClick: () => setIsCreating(true) } : undefined}
+ action={canCreateTask ? { label: "Assign Task", onClick: () => setIsCreating(true) } : { label: "Add Daily Task", onClick: () => setIsAddingDailyTask(true) }}
  description="No tasks match the current filters. Clear your search or create a task to get moving."
  icon={ListChecks}
  title="No tasks found"
  />
  ) : (
- <div className="grid gap-4 xl:grid-cols-6">
- {taskStatuses.map((column) => (
- <Card
- className="glass min-h-[360px]"
- key={column}
- onDragOver={(event) => event.preventDefault()}
- onDrop={() => {
- if (draggingTaskId) {
- updateTaskStatus(draggingTaskId, column);
- setDraggingTaskId(null);
- }
- }}
- >
- <CardHeader className="p-4">
- <div className="flex items-center justify-between gap-3">
- <CardTitle className="text-base">{column}</CardTitle>
- <span className="rounded-full bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">
- {filteredTasks.filter((task) => task.status === column).length}
- </span>
- </div>
- </CardHeader>
- <CardContent className="space-y-3 p-4 pt-0">
- {filteredTasks
- .filter((task) => task.status === column)
- .map((task) => (
- <TaskCard
- key={task.id}
- projects={projects}
- onDelete={canDeleteTask ? () => deleteTask(task.id) : undefined}
- onDragStart={canUpdateTask ? () => setDraggingTaskId(task.id) : undefined}
- onEdit={canManageTask ? () => setEditingTask(task) : undefined}
- onLogTime={canLogTime ? () => logTime(task.id) : undefined}
- onOpen={() => setSelectedTask(task)}
- onToggleChecklist={(itemId) => toggleChecklist(task.id, itemId)}
- task={task}
- />
- ))}
- </CardContent>
- </Card>
- ))}
- </div>
- )
- )}
-
- {view === "backlog" && (
- <BacklogView
- activeProject={activeProject}
- backlogTasks={backlogTasks}
- canManage={canManageTask}
- onCloseSprint={(sprint) => updateSprintStatus(sprint, "Closed")}
- onCreateSprint={createSprint}
- onMoveToBacklog={moveToBacklog}
- onMoveToSprint={moveToSprint}
- onOpenTask={setSelectedTask}
- onStartSprint={(sprint) => updateSprintStatus(sprint, "Active")}
- selectedSprintId={selectedSprintId}
- setSelectedSprintId={setSelectedSprintId}
- sprintTasks={sprintTasks}
- sprints={visibleSprints}
- />
- )}
-
- {view === "hierarchy" && <HierarchyView onOpenTask={setSelectedTask} projects={projects} tasks={filteredTasks} />}
-
- {view === "list" && (
  <Card className="glass overflow-hidden">
  <div className="overflow-x-auto">
  <table className="w-full min-w-[980px] text-sm">
@@ -1591,10 +1093,109 @@ export function TasksPage() {
  </table>
  </div>
  </Card>
+ )
  )}
 
- {view === "calendar" && <CalendarView tasks={filteredTasks} />}
- {view === "timeline" && <TimelineView tasks={filteredTasks} />}
+ {view === "team" && !selectedTeamMember && (
+ teamSummaryLoading ? (
+ <p className="px-1 text-sm text-muted-foreground">Loading team...</p>
+ ) : teamSummary.length === 0 ? (
+ <EmptyState description="You don't currently have anyone's tasks to monitor." icon={UsersRound} title="No team members found" />
+ ) : (
+ <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+ {teamSummary.map((member) => (
+ <button
+ className="rounded-lg border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40"
+ key={member.id}
+ onClick={() => void openTeamMember(member)}
+ type="button"
+ >
+ <p className="font-semibold">{member.fullName}</p>
+ <p className="mt-1 text-xs text-muted-foreground">{member.role}</p>
+ <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+ <div className="rounded-md bg-muted px-2 py-1.5">
+ <p className="font-bold">{member.totalTasks}</p>
+ <p className="text-muted-foreground">Total</p>
+ </div>
+ <div className="rounded-md bg-muted px-2 py-1.5">
+ <p className="font-bold">{member.completedTasks}</p>
+ <p className="text-muted-foreground">Done</p>
+ </div>
+ <div className="rounded-md bg-muted px-2 py-1.5">
+ <p className="font-bold">{member.overdueTasks}</p>
+ <p className="text-muted-foreground">Overdue</p>
+ </div>
+ </div>
+ </button>
+ ))}
+ </div>
+ )
+ )}
+
+ {view === "team" && selectedTeamMember && (
+ <div className="space-y-4">
+ <div className="flex flex-wrap items-center justify-between gap-3">
+ <Button onClick={() => setSelectedTeamMember(null)} size="sm" type="button" variant="outline">
+ <ArrowLeft className="h-4 w-4" />
+ Back to team
+ </Button>
+ <div className="min-w-0 flex-1">
+ <p className="font-semibold">{selectedTeamMember.fullName}</p>
+ <p className="text-xs text-muted-foreground">{selectedTeamMember.role}</p>
+ </div>
+ {canCreateTask && (
+ <Button
+ onClick={() => {
+ setAssignTaskForPerson(selectedTeamMember.fullName);
+ setIsCreating(true);
+ }}
+ size="sm"
+ type="button"
+ >
+ <Plus className="h-4 w-4" />
+ Assign Task
+ </Button>
+ )}
+ </div>
+ {teamMemberTasksLoading ? (
+ <p className="px-1 text-sm text-muted-foreground">Loading tasks...</p>
+ ) : teamMemberTasks.length === 0 ? (
+ <EmptyState description="This person has no tasks yet." icon={ListChecks} title="No tasks found" />
+ ) : (
+ <Card className="glass overflow-hidden">
+ <div className="overflow-x-auto">
+ <table className="w-full min-w-[720px] text-sm">
+ <thead className="border-b bg-muted text-left">
+ <tr>
+ <th className="p-4">Task</th>
+ <th className="p-4">Status</th>
+ <th className="p-4">Priority</th>
+ <th className="p-4">Due Date</th>
+ </tr>
+ </thead>
+ <tbody>
+ {teamMemberTasks.map((task) => (
+ <tr className="cursor-pointer border-b hover:bg-muted/50" key={task.id} onClick={() => setSelectedTask(task)}>
+ <td className="p-4">
+ <p className="font-semibold">{task.title}</p>
+ <p className="mt-1 text-xs text-primary">{task.taskCode}</p>
+ </td>
+ <td className="p-4">
+ <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", statusClass(task.status))}>{task.status}</span>
+ </td>
+ <td className="p-4">
+ <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", priorityClass(task.priority))}>{task.priority}</span>
+ </td>
+ <td className="p-4">{task.dueDate}</td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </div>
+ </Card>
+ )}
+ </div>
+ )}
  </section>
 
  <aside className="space-y-4">
@@ -1642,12 +1243,58 @@ export function TasksPage() {
  </aside>
  </div>
 
+ {isAddingDailyTask && (
+ <Dialog
+ as="form"
+ className="max-w-md"
+ onClose={() => {
+ setIsAddingDailyTask(false);
+ setDailyTaskTitle("");
+ }}
+ onSubmit={(event) => {
+ event.preventDefault();
+ void addDailyTask();
+ }}
+ >
+ <div className="mb-4">
+ <h2 className="text-xl font-bold">Add Daily Task</h2>
+ <p className="mt-1 text-sm text-muted-foreground">Ye task sirf aapke liye add hoga (aaj ka daily task).</p>
+ </div>
+ <div className="space-y-2">
+ <Label htmlFor="daily-task-title">Task</Label>
+ <Input
+ autoFocus
+ id="daily-task-title"
+ onChange={(event) => setDailyTaskTitle(event.target.value)}
+ placeholder="Aaj aap kya kaam karoge?"
+ value={dailyTaskTitle}
+ />
+ </div>
+ <div className="mt-6 flex justify-end gap-3">
+ <Button
+ onClick={() => {
+ setIsAddingDailyTask(false);
+ setDailyTaskTitle("");
+ }}
+ type="button"
+ variant="outline"
+ >
+ Cancel
+ </Button>
+ <Button disabled={savingDailyTask || dailyTaskTitle.trim().length < 2} type="submit">
+ {savingDailyTask ? "Adding..." : "Add Daily Task"}
+ </Button>
+ </div>
+ </Dialog>
+ )}
  {(isCreating || editingTask) && (
  <TaskFormModal
+ defaultAssignee={assignTaskForPerson ?? undefined}
  initialTask={editingTask}
  onClose={() => {
  setIsCreating(false);
  setEditingTask(null);
+ setAssignTaskForPerson(null);
  }}
  onSubmit={upsertTask}
  projects={projects}
@@ -1666,8 +1313,6 @@ export function TasksPage() {
  setSelectedTask(null);
  }}
  onLogTime={() => logTime(selectedTask.id)}
- onMoveToBacklog={() => moveToBacklog(selectedTask)}
- onMoveToSprint={(sprintId) => moveToSprint(selectedTask, sprintId)}
  onToggleChecklist={(itemId) => toggleChecklist(selectedTask.id, itemId)}
  onWorkUpdate={(input) => void updateTaskFields(selectedTask, input)}
  projects={projects}

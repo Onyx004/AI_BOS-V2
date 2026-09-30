@@ -9,6 +9,7 @@ import { fetchRooms } from "@shared/collaboration/collaboration.api";
 import type { CollaborationRoom } from "@shared/collaboration/collaboration.schema";
 import { apiClient } from "@shared/lib/api-client";
 import { NotificationBell } from "@shared/notifications/NotificationBell";
+import { usePresenceHeartbeat } from "@shared/attendance/usePresenceHeartbeat";
 import { useBackendDataBridge } from "@shared/realtime/data-sync";
 import { ConfirmDialogProvider } from "@shared/ui/confirm-dialog";
 import { CompanyLogo } from "@shared/ui/company-logo";
@@ -21,6 +22,7 @@ export type AppRouteConfig = {
   path: string;
   element: ReactNode;
   allowedRoles?: readonly AuthRole[];
+  allowedPermissions?: readonly string[];
   allowFullAccessBypass?: boolean;
   requireProfileComplete?: boolean;
   requireFaceEnrollment?: boolean;
@@ -42,7 +44,6 @@ function AppFallback() {
 
 const LazyAppExperience = lazyNamed(() => import("./AppExperience"), "AppExperience");
 const LazyCommandPalette = lazyNamed(() => import("./CommandPalette"), "CommandPalette");
-const LazyFloatingAIAssistant = lazyNamed(() => import("@shared/ai"), "FloatingAIAssistant");
 const LazyPwaChrome = lazyNamed(() => import("@shared/pwa"), "PwaChrome");
 const LazyNotificationPopupListener = lazyNamed(() => import("@shared/notifications"), "NotificationPopupListener");
 
@@ -75,6 +76,7 @@ function getRouteElement(route: AppRouteConfig) {
   return (
     <RequireAuth
       allowedRoles={route.allowedRoles}
+      allowedPermissions={route.allowedPermissions}
       allowFullAccessBypass={route.allowFullAccessBypass}
       requireProfileComplete={route.requireProfileComplete}
       requireFaceEnrollment={route.requireFaceEnrollment}
@@ -119,9 +121,13 @@ function useVisibleWorkspaceControls({
 }) {
   const location = useLocation();
   const [currentRole, setCurrentRole] = useState<AuthRole | undefined>(() => getStoredAuthRole());
+  const [currentPermissions, setCurrentPermissions] = useState<readonly string[]>(() => getStoredAuthSession()?.user.permissions ?? []);
 
   useEffect(() => {
-    const refreshRole = () => setCurrentRole(getStoredAuthRole());
+    const refreshRole = () => {
+      setCurrentRole(getStoredAuthRole());
+      setCurrentPermissions(getStoredAuthSession()?.user.permissions ?? []);
+    };
     refreshRole();
     window.addEventListener(authSessionChangedEvent, refreshRole);
     return () => window.removeEventListener(authSessionChangedEvent, refreshRole);
@@ -129,10 +135,10 @@ function useVisibleWorkspaceControls({
 
   return useMemo(
     () => ({
-      visibleQuickCreateActions: filterByRole(quickCreateActions, currentRole, allowFullAccessBypass),
-      visibleSearchItems: filterByRole(searchItems, currentRole, allowFullAccessBypass),
+      visibleQuickCreateActions: filterByRole(quickCreateActions, currentRole, allowFullAccessBypass, currentPermissions),
+      visibleSearchItems: filterByRole(searchItems, currentRole, allowFullAccessBypass, currentPermissions),
     }),
-    [allowFullAccessBypass, currentRole, quickCreateActions, searchItems],
+    [allowFullAccessBypass, currentPermissions, currentRole, quickCreateActions, searchItems],
   );
 }
 
@@ -817,7 +823,7 @@ function ProfileMenu() {
             <div className="border-b px-3 py-3">
               <p className="truncate text-sm font-semibold">{session?.user.fullName ?? "Profile"}</p>
               <p className="mt-1 truncate text-xs text-muted-foreground">{session?.user.email ?? "Signed in account"}</p>
-              {session?.user.role && <p className="mt-2 w-fit rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">{session.user.role}</p>}
+              {session?.user.role && <p className="mt-2 w-fit rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">{session.user.roleName ?? session.user.role}</p>}
             </div>
             <div className="mt-2 space-y-1">
               <Link
@@ -979,7 +985,6 @@ const WorkspaceChrome = memo(function WorkspaceChrome({
     <>
       <GlobalTopBar items={visibleSearchItems} quickActions={visibleQuickCreateActions} />
       <LazyCommandPalette items={visibleSearchItems} />
-      <LazyFloatingAIAssistant />
       <LazyAppExperience items={visibleSearchItems} />
       <LazyPwaChrome />
       <LazyNotificationPopupListener />
@@ -1000,6 +1005,7 @@ export function AppProviders({
 }) {
   const chromeMounted = useIdleMount();
   useBackendDataBridge();
+  usePresenceHeartbeat();
 
   return (
     <ToastProvider>

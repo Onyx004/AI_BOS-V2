@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@shared/ui/card";
 import { Input } from "@shared/ui/input";
 import { useToast } from "@shared/ui/toast-context";
 import { fetchAssignableRoles, updateEmployeeDepartment, updateEmployeeRole } from "./employees.api";
-import type { AuthRole } from "@shared/auth/types";
 import type { Department, Employee } from "./employees.types";
 
 type DepartmentGroupPanelProps = {
@@ -15,14 +14,16 @@ type DepartmentGroupPanelProps = {
  otherDepartments: Department[];
  nonMembers: Employee[];
  onChanged: () => void;
+ /** The "Unassigned" group: employees without a department. Adding someone here takes them out of their department. */
+ isUnassigned?: boolean;
 };
 
-export function DepartmentGroupPanel({ department, members, otherDepartments, nonMembers, onChanged }: DepartmentGroupPanelProps) {
+export function DepartmentGroupPanel({ department, members, otherDepartments, nonMembers, onChanged, isUnassigned = false }: DepartmentGroupPanelProps) {
  const [search, setSearch] = useState("");
  const [busyId, setBusyId] = useState<string | null>(null);
  const [movePickerId, setMovePickerId] = useState<string | null>(null);
  const [rolePickerId, setRolePickerId] = useState<string | null>(null);
- const [assignableRoleOptions, setAssignableRoleOptions] = useState<AuthRole[]>([]);
+ const [assignableRoleOptions, setAssignableRoleOptions] = useState<string[]>([]);
  const { toast } = useToast();
 
  useEffect(() => {
@@ -42,8 +43,8 @@ export function DepartmentGroupPanel({ department, members, otherDepartments, no
  const addMember = async (employee: Employee) => {
  setBusyId(employee.id);
  try {
- await updateEmployeeDepartment(employee.id, department.id);
- toast({ title: "Member added", description: `${employee.name} moved to ${department.name}.`, type: "success" });
+ await updateEmployeeDepartment(employee.id, isUnassigned ? null : department.id);
+ toast({ title: "Member added", description: `${employee.name} moved to ${isUnassigned ? "Unassigned" : department.name}.`, type: "success" });
  setSearch("");
  onChanged();
  } catch (error) {
@@ -53,12 +54,12 @@ export function DepartmentGroupPanel({ department, members, otherDepartments, no
  }
  };
 
- const moveMember = async (employee: Employee, targetDepartmentId: string) => {
+ const moveMember = async (employee: Employee, targetDepartmentId: string | null) => {
  setBusyId(employee.id);
  try {
  await updateEmployeeDepartment(employee.id, targetDepartmentId);
  const target = otherDepartments.find((item) => item.id === targetDepartmentId);
- toast({ title: "Member moved", description: `${employee.name} moved to ${target?.name ?? "another department"}.`, type: "success" });
+ toast({ title: "Member moved", description: `${employee.name} moved to ${targetDepartmentId === null ? "Unassigned" : (target?.name ?? "another department")}.`, type: "success" });
  setMovePickerId(null);
  onChanged();
  } catch (error) {
@@ -68,7 +69,7 @@ export function DepartmentGroupPanel({ department, members, otherDepartments, no
  }
  };
 
- const changeRole = async (employee: Employee, role: AuthRole) => {
+ const changeRole = async (employee: Employee, role: string) => {
  setBusyId(employee.id);
  try {
  await updateEmployeeRole(employee.id, role);
@@ -91,7 +92,7 @@ export function DepartmentGroupPanel({ department, members, otherDepartments, no
  <span className="truncate" title={department.name}>{department.name}</span>
  </CardTitle>
  <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
- {department.memberCount} {department.memberCount === 1 ? "member" : "members"}
+ {isUnassigned ? members.length : department.memberCount} {(isUnassigned ? members.length : department.memberCount) === 1 ? "member" : "members"}
  </span>
  </div>
  {department.head && <p className="truncate text-xs text-muted-foreground">Head: {department.head.fullName}</p>}
@@ -103,7 +104,7 @@ export function DepartmentGroupPanel({ department, members, otherDepartments, no
  <Input
  className="h-9 pl-8 text-sm"
  onChange={(event) => setSearch(event.target.value)}
- placeholder="Add an employee to this department..."
+ placeholder={isUnassigned ? "Move an employee to Unassigned..." : "Add an employee to this department..."}
  value={search}
  />
  </div>
@@ -128,7 +129,7 @@ export function DepartmentGroupPanel({ department, members, otherDepartments, no
  )}
 
  <div className="space-y-2">
- {members.length === 0 && <p className="text-sm text-muted-foreground">No members yet.</p>}
+ {members.length === 0 && <p className="text-sm text-muted-foreground">{isUnassigned ? "Everyone is placed in a department." : "No members yet."}</p>}
  {members.map((employee) => (
  <div className="rounded-lg border bg-background p-2.5" key={employee.id}>
  <div className="flex flex-wrap items-center gap-2.5">
@@ -177,7 +178,17 @@ export function DepartmentGroupPanel({ department, members, otherDepartments, no
 
  {movePickerId === employee.id && (
  <div className="mt-2 flex flex-wrap gap-1.5 border-t pt-2">
- {otherDepartments.length === 0 && <p className="text-xs text-muted-foreground">No other departments yet.</p>}
+ {otherDepartments.length === 0 && <p className="text-xs text-muted-foreground">{isUnassigned ? "Create a department first." : "No other departments yet."}</p>}
+ {!isUnassigned && (
+ <button
+ className="rounded-full border border-dashed px-2 py-1 text-[11px] font-semibold hover:border-primary/50 hover:text-primary disabled:opacity-50"
+ disabled={busyId === employee.id}
+ onClick={() => void moveMember(employee, null)}
+ type="button"
+ >
+ Unassigned
+ </button>
+ )}
  {otherDepartments.map((target) => (
  <button
  className="rounded-full border px-2 py-1 text-[11px] font-semibold hover:border-primary/50 hover:text-primary disabled:opacity-50"

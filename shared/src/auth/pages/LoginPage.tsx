@@ -4,7 +4,15 @@ import { ArrowRight, TriangleAlert } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
-import { clearAuthSession, clearRememberedEmail, getRememberedEmail, login, setRememberedEmail } from "@shared/auth/auth-service";
+import {
+ clearAuthSession,
+ clearRememberedEmail,
+ getRememberedEmail,
+ getRememberedLoginMethod,
+ login,
+ setRememberedEmail,
+ setRememberedLoginMethod,
+} from "@shared/auth/auth-service";
 
 import { AuthFormField } from "@shared/auth/components/AuthFormField";
 import { AuthLayout } from "@shared/auth/components/AuthLayout";
@@ -33,12 +41,15 @@ export function LoginPage({
  secondaryAction,
 }: LoginPageProps) {
  const [loginError, setLoginError] = useState("");
+ const [loginMethod, setLoginMethod] = useState<"password" | "pin">(getRememberedLoginMethod);
  const navigate = useNavigate();
  const rememberedEmail = getRememberedEmail();
  const {
  formState: { errors, isSubmitting },
  handleSubmit,
  register,
+ resetField,
+ setError,
  } = useForm<LoginFormValues>({
  resolver: zodResolver(loginSchema),
  defaultValues: {
@@ -50,16 +61,21 @@ export function LoginPage({
 
  const onSubmit: SubmitHandler<LoginFormValues> = async (values) => {
  setLoginError("");
+ if (loginMethod === "pin" && !/^\d{6}$/.test(values.password)) {
+ setError("password", { message: "PIN must be exactly 6 digits" });
+ return;
+ }
  try {
  // "Remember me" here only ever controls the email prefill below — it must
  // never cause the session/tokens to persist in localStorage across an app
  // restart, so the session-persistence flag is always false.
- const session = await login(values.email, values.password, false);
+ const session = await login(values.email, values.password, false, loginMethod);
  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(session.user.role)) {
  clearAuthSession();
  setLoginError(`This ${session.user.role} account is not allowed on this login page.`);
  return;
  }
+ setRememberedLoginMethod(loginMethod);
  if (values.rememberMe) {
  setRememberedEmail(values.email);
  } else {
@@ -95,11 +111,30 @@ export function LoginPage({
  type="email"
  />
 
+ <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1 text-sm font-semibold">
+ {(["password", "pin"] as const).map((method) => (
+ <button
+ className={loginMethod === method ? "rounded bg-background px-3 py-1.5 shadow-sm" : "rounded px-3 py-1.5 text-muted-foreground"}
+ key={method}
+ onClick={() => {
+ setLoginMethod(method);
+ setLoginError("");
+ resetField("password");
+ }}
+ type="button"
+ >
+ {method === "password" ? "Password" : "6-digit PIN"}
+ </button>
+ ))}
+ </div>
+
  <AuthFormField
- autoComplete="current-password"
+ autoComplete={loginMethod === "pin" ? "off" : "current-password"}
  error={errors.password}
- label="Password"
- placeholder="Enter your password"
+ inputMode={loginMethod === "pin" ? "numeric" : undefined}
+ label={loginMethod === "pin" ? "PIN" : "Password"}
+ maxLength={loginMethod === "pin" ? 6 : undefined}
+ placeholder={loginMethod === "pin" ? "Enter your 6-digit PIN" : "Enter your password"}
  registration={{ id: "password", ...register("password") }}
  type="password"
  />

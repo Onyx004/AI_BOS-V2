@@ -70,6 +70,10 @@ export class DepartmentRepository {
     return DepartmentModel.exists({ parentDepartmentId: departmentId });
   }
 
+  async detachChildren(departmentId: string) {
+    return DepartmentModel.updateMany({ parentDepartmentId: departmentId }, { $unset: { parentDepartmentId: "" } });
+  }
+
   async existsForBranch(branchId: string) {
     return DepartmentModel.exists({ branchId });
   }

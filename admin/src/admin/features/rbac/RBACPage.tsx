@@ -164,14 +164,16 @@ export function RBACPage() {
 
  const selectedRole = roles.find((role) => role._id === selectedRoleId);
  const catalogByModule = groupCatalogByModule(catalog);
+ const lockedKeys = new Set(selectedRole?.defaultPermissionKeys ?? []);
 
  const selectRoleForMatrix = (role: Role) => {
  setSelectedRoleId(role._id);
- setMatrixPermissionKeys(role.permissionKeys);
+ setMatrixPermissionKeys([...new Set([...(role.defaultPermissionKeys ?? []), ...role.permissionKeys])]);
  setMatrixTemplateId("");
  };
 
  const toggleMatrixPermission = (key: string) => {
+ if (lockedKeys.has(key)) return;
  setMatrixPermissionKeys((current) =>
  current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
  );
@@ -183,7 +185,7 @@ export function RBACPage() {
  if (!template) return;
 
  const catalogKeys = new Set(catalog.map((entry) => entry.key));
- setMatrixPermissionKeys(template.permissionKeys.filter((key) => catalogKeys.has(key)));
+ setMatrixPermissionKeys([...new Set([...lockedKeys, ...template.permissionKeys.filter((key) => catalogKeys.has(key))])]);
  };
 
  const saveMatrix = async () => {
@@ -498,7 +500,11 @@ export function RBACPage() {
  type="button"
  >
  <span>{role.name}</span>
- {role.hasFullAccess && <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs text-primary">Full Access</span>}
+ {role.hasFullAccess ? (
+ <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs text-primary">Full Access</span>
+ ) : (
+ <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{role.isSystem ? "Default" : "Custom"}</span>
+ )}
  </button>
  ))}
  </div>
@@ -508,6 +514,8 @@ export function RBACPage() {
  subtitle={
  selectedRole?.hasFullAccess
  ? "This role has full access to every permission and cannot be edited."
+ : selectedRole?.isSystem
+ ? "Default role: its default permissions are locked and cannot be removed. You can add extra permissions and remove them again."
  : "Toggle permissions granted to this role, grouped by module."
  }
  title={selectedRole ? `${selectedRole.name} Permissions` : "Select a role"}
@@ -548,14 +556,19 @@ export function RBACPage() {
  key={entry.key}
  >
  <input
- checked={selectedRole.hasFullAccess || matrixPermissionKeys.includes(entry.key)}
+ checked={selectedRole.hasFullAccess || lockedKeys.has(entry.key) || matrixPermissionKeys.includes(entry.key)}
  className="mt-0.5 h-4 w-4 accent-primary"
- disabled={selectedRole.hasFullAccess}
+ disabled={selectedRole.hasFullAccess || lockedKeys.has(entry.key)}
  onChange={() => toggleMatrixPermission(entry.key)}
  type="checkbox"
  />
  <span>
- <span className="block font-semibold">{entry.label}</span>
+ <span className="block font-semibold">
+ {entry.label}
+ {lockedKeys.has(entry.key) && (
+ <span className="ml-2 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary">Default</span>
+ )}
+ </span>
  <span className="mt-1 block text-xs text-muted-foreground">{entry.description}</span>
  </span>
  </label>
@@ -691,7 +704,9 @@ export function RBACPage() {
  <div className="rounded-lg border bg-background p-3 text-sm" key={role._id}>
  <span className="font-semibold">{role.name}</span>
  <span className="ml-2 text-xs text-muted-foreground">
- {role.hasFullAccess ? "Full access" : `${role.permissionKeys.length} permissions`}
+ {role.hasFullAccess
+ ? "Full access"
+ : `${role.defaultPermissionKeys?.length ?? 0} default${role.permissionKeys.length > (role.defaultPermissionKeys?.length ?? 0) ? ` + ${role.permissionKeys.length - (role.defaultPermissionKeys?.length ?? 0)} extra` : ""}`}
  </span>
  </div>
  ))}
